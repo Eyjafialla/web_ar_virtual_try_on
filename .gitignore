@@ -1,0 +1,46 @@
+# ── Node & logs ─────────────────────────────────────────────
+node_modules/
+*.log
+npm-debug.log*
+yarn-debug.log*
+pnpm-debug.log*
+
+# ── Build outputs ──────────────────────────────────────────
+dist/
+build/
+out/
+.next/
+*.tsbuildinfo
+
+# ── Vite / tooling caches ──────────────────────────────────
+.vite/
+.cache/
+temp/
+.tmp/
+
+# ── Env files (保留一个示例) ───────────────────────────────
+.env
+.env.local
+.env.*.local
+!.env.example
+
+# ── Tests / coverage / e2e ─────────────────────────────────
+coverage/
+.vitest/
+.playwright/
+test-results/
+cypress/videos/
+cypress/screenshots/
+cypress/downloads/
+
+# ── Editors / OS ───────────────────────────────────────────
+.vscode/
+.idea/
+*.swp
+.DS_Store
+Thumbs.db
+
+# ── (可选) 如果混入了一点 Python 脚本 ─────────────────────
+__pycache__/
+*.py[cod]
+venv/
