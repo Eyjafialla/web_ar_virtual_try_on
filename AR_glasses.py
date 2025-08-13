@@ -1,6 +1,3 @@
-# facemesh_ar_glasses.py
-# -*- coding: utf-8 -*-
-# 依赖: pip install opencv-python mediapipe
 import collections
 import os, time, math, json
 import cv2
@@ -19,9 +16,9 @@ import mediapipe as mp
 
 # —— 眼镜贴图微调参数 ——（可用热键现场调）
 GLASSES_SCALE   = 1.00  # 整体等比缩放，>1 放大
-GLASSES_SCALE_X = 1.00  # 沿“眼线方向”的宽度缩放
+GLASSES_SCALE_X = 1.34  # 沿“眼线方向”的宽度缩放
 GLASSES_SCALE_Y = 1.00  # 沿“法线方向”(上下高度)的缩放
-GLASSES_OFFSET_N = 0.00 # 沿法线偏移（乘以眼距 d），正值向下
+GLASSES_OFFSET_N = -0.01 # 沿法线偏移（乘以眼距 d），正值向下
 GLASSES_SHIFT_T  = 0.00 # 沿眼线切向平移（乘以眼距 d），正值往右
 
 # ---------- 基本配置 ----------
@@ -46,7 +43,7 @@ KNOWN_DIST_CM = 60.0
 CALIB_FILE = "distance_calib.json"
 
 # ---------- 贴图: PNG (可带或不带透明通道) ----------
-OVERLAY_PATH = "Frame_A.png"
+OVERLAY_PATH = "Frame_A_new_rgba.png"
 
 # 当贴图虽然是 RGBA，但 alpha 基本全 255（镜片是白块）时，强制用 edge 重建透明通道
 FORCE_EDGE_MASK = True
@@ -92,8 +89,8 @@ H_ov, W_ov = overlay_rgba.shape[:2]
 
 # 贴图里的三个“锚点”(像素坐标) —— 对应: 263(左外), 33(右外), 168(鼻梁)
 # 不对齐就微调
-SRC_L = (int(0.15 * W_ov), int(0.52 * H_ov))
-SRC_R = (int(0.85 * W_ov), int(0.52 * H_ov))
+SRC_L = (int(0.18 * W_ov), int(0.52 * H_ov))
+SRC_R = (int(0.82 * W_ov), int(0.52 * H_ov))
 SRC_N = (int(0.50 * W_ov), int(0.46 * H_ov))
 # 若左右反：交换 SRC_L/SRC_R 或 cv2.flip(overlay_rgba,1)
 
