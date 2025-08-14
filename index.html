@@ -3,333 +3,236 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <title>Web AR Try-On • Day 1 Boilerplate</title>
+  <title>Web AR Try-On</title>
   <style>
-    :root { --bg:#0b0f19; --panel:#121828; --text:#e7ecf3; --muted:#98a2b3; --accent:#4f46e5; }
-    * { box-sizing: border-box; }
-    html, body { height: 100%; }
-    body { margin: 0; background: radial-gradient(100% 100% at 50% 0%, #0f172a 0%, #0b0f19 100%); color: var(--text); font: 14px/1.4 system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,"Apple Color Emoji","Segoe UI Emoji"; }
-
-    .wrap { display: grid; grid-template-rows: auto 1fr auto; min-height: 100%; }
-
-    header {
-      position: sticky; top: 0; z-index: 10;
-      display: flex; align-items: center; gap: 12px;
-      padding: 10px 16px; background: rgba(18,24,40,.8); backdrop-filter: blur(10px);
-      border-bottom: 1px solid rgba(255,255,255,.06);
-    }
-    header .brand { font-weight: 700; letter-spacing:.2px; }
-    header .spacer { flex: 1; }
-    header button, header select {
-      appearance: none; border: 1px solid rgba(255,255,255,.12); background: #0f1424; color: var(--text);
-      padding: 8px 12px; border-radius: 10px; cursor: pointer; font-weight: 600;
-    }
-    header button:hover { border-color: rgba(255,255,255,.22); }
-    header button:disabled { opacity:.6; cursor: not-allowed; }
-
-    .stage { position: relative; display: grid; place-items: center; padding: 12px; height: 100%; }
-    .viewport { position: relative; width: min(100%, 960px); aspect-ratio: 16/9; background: #0a0f1f; border-radius: 16px; overflow: hidden; border: 1px solid rgba(255,255,255,.06); }
-
-    /* Mirror video for selfie experience */
-    video#cam { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; transform: scaleX(-1); }
-    canvas#overlay { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
-
-    .statusbar { position: absolute; inset: auto 12px 12px 12px; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
-    .badge { padding: 6px 10px; border-radius: 20px; background: rgba(255,255,255,.06); color: var(--muted); border: 1px solid rgba(255,255,255,.1); }
-    .badge.ok { color: #10b981; background: rgba(16,185,129,.12); border-color: rgba(16,185,129,.3); }
-    .badge.err { color: #ef4444; background: rgba(239,68,68,.12); border-color: rgba(239,68,68,.3); }
-    .badge.warn { color: #f59e0b; background: rgba(245,158,11,.12); border-color: rgba(245,158,11,.3); }
-
-    footer { padding: 10px 16px; color: var(--muted); display: flex; gap: 8px; align-items: center; justify-content: space-between; flex-wrap: wrap; }
-    .hint { opacity: .8; }
-    code { background: rgba(255,255,255,.06); padding: 2px 6px; border-radius: 6px; }
-
-    .troubleshoot { max-width: 960px; margin: 8px auto 0; font-size: 12px; color: #cbd5e1; }
-    .troubleshoot details { background: rgba(255,255,255,.04); border:1px solid rgba(255,255,255,.08); padding:8px 12px; border-radius: 10px; }
-    .tests { font-size:12px; margin-left: 8px; }
-    .tests .pass { color:#10b981; }
-    .tests .fail { color:#ef4444; }
+    :root{--bg:#0b0f19;--panel:#121828;--text:#e7ecf3;--muted:#98a2b3;--accent:#4f46e5}
+    *{box-sizing:border-box} html,body{height:100%}
+    body{margin:0;background:radial-gradient(100% 100% at 50% 0%,#0f172a 0%,#0b0f19 100%);color:var(--text);font:14px/1.4 system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial}
+    .wrap{display:grid;grid-template-rows:auto 1fr auto;min-height:100%}
+    header{position:sticky;top:0;z-index:10;display:flex;align-items:center;gap:12px;padding:10px 16px;background:rgba(18,24,40,.8);backdrop-filter:blur(10px);border-bottom:1px solid rgba(255,255,255,.06)}
+    header .brand{font-weight:700} .spacer{flex:1}
+    header button,header select{appearance:none;border:1px solid rgba(255,255,255,.12);background:#0f1424;color:var(--text);padding:8px 12px;border-radius:10px;font-weight:600;cursor:pointer}
+    header button:hover{border-color:rgba(255,255,255,.22)} header button:disabled{opacity:.6;cursor:not-allowed}
+    .seg{display:flex;border:1px solid rgba(255,255,255,.12);border-radius:10px;overflow:hidden}
+    .seg button{border:0;background:#0f1424;color:var(--text);padding:8px 12px;font-weight:600;cursor:pointer}
+    .seg button+button{border-left:1px solid rgba(255,255,255,.12)} .seg button.active{background:var(--accent);color:#fff}
+    .stage{position:relative;display:grid;place-items:center;padding:12px;height:100%}
+    .viewport{position:relative;width:min(100%,960px);aspect-ratio:16/9;background:#0a0f1f;border-radius:16px;overflow:hidden;border:1px solid rgba(255,255,255,.06)}
+    video, img.stream {position:absolute;inset:0;width:100%;height:100%;object-fit:cover;transform:scaleX(-1)}
+    canvas#overlay{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
+    .statusbar{position:absolute;inset:auto 12px 12px 12px;display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+    .badge{padding:6px 10px;border-radius:20px;background:rgba(255,255,255,.06);color:var(--muted);border:1px solid rgba(255,255,255,.1)}
+    .badge.ok{color:#10b981;background:rgba(16,185,129,.12);border-color:rgba(16,185,129,.3)}
+    .badge.err{color:#ef4444;background:rgba(239,68,68,.12);border-color:rgba(239,68,68,.3)}
+    .badge.warn{color:#f59e0b;background:rgba(245,158,11,.12);border-color:rgba(245,158,11,.3)}
+    .panel{width:min(100%,960px);margin:10px auto 0;background:rgba(18,24,40,.7);border:1px solid rgba(255,255,255,.08);border-radius:14px;padding:12px;display:grid;gap:10px}
+    .grid{display:grid;grid-template-columns:repeat(6,1fr);gap:10px} @media(max-width:920px){.grid{grid-template-columns:repeat(2,1fr)}}
+    .ctrl{border:1px solid rgba(255,255,255,.08);border-radius:12px;padding:10px;background:#0f1424}
+    .ctrl label{display:flex;align-items:center;justify-content:space-between;font-weight:600}
+    .ctrl output{color:#a8b3cf;font-variant-numeric:tabular-nums}
+    .ctrl input[type=range]{width:100%;margin-top:8px}
+    .row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+    .row .switch{display:inline-flex;align-items:center;gap:8px;padding:8px 10px;border:1px solid rgba(255,255,255,.12);border-radius:999px;background:#0f1424}
+    .row .switch input{accent-color:var(--accent);transform:scale(1.1)}
+    .row .btn{padding:8px 12px;border-radius:10px;border:1px solid rgba(255,255,255,.12);background:#0f1424;color:var(--text);font-weight:600;cursor:pointer}
   </style>
 </head>
 <body>
 <div class="wrap">
   <header>
-    <div class="brand">Web AR Try-On • Day 1</div>
+    <div class="brand">Web AR Try-On</div>
+
+    <!-- Frame 切换（占位，后端未来可接 /api/frame） -->
+    <div class="seg" id="frameSwitcher" role="group" aria-label="Frame switcher">
+      <button id="btnFrameA" class="active" type="button">Frame A</button>
+      <button id="btnFrameB" type="button">Frame B</button>
+      <button id="btnFrameC" type="button">Frame C</button>
+    </div>
+
+    <!-- NEW: 来源切换 -->
+    <div class="seg" id="sourceSwitcher" role="group" aria-label="Source switcher" style="margin-left:8px">
+      <button id="srcWebcam" class="active" type="button">WebCam</button>
+      <button id="srcServer" type="button">Server (MJPEG)</button>
+    </div>
+
     <div class="spacer"></div>
-    <select id="facing">
-      <option value="user" selected>前置摄像头</option>
-      <option value="environment">后置摄像头</option>
-    </select>
-    <button id="start">开启摄像头</button>
-    <button id="stop" disabled>停止</button>
-    <button id="demo">使用演示源</button>
-    <button id="retry" disabled>重试</button>
+    <button id="start">Start</button>
+    <button id="stop" disabled>Stop</button>
+    <button id="snap" disabled>📸 Snapshot</button>
+    <div id="frameBadge" class="badge">Frame: A</div>
   </header>
 
   <main class="stage">
     <div class="viewport">
-      <video id="cam" playsinline muted autoplay></video>
+      <video id="cam" playsinline muted></video>
+      <img id="mjpeg" class="stream" alt="" style="display:none">
       <canvas id="overlay"></canvas>
       <div class="statusbar">
-        <div id="perm" class="badge">等待授权…</div>
+        <div id="perm" class="badge">Ready</div>
         <div id="fps" class="badge">FPS: –</div>
         <div id="res" class="badge">– × –</div>
         <div id="env" class="badge warn" style="display:none"></div>
       </div>
     </div>
-    <div class="troubleshoot">
-      <details>
-        <summary>摄像头无法开启？点此查看排障建议</summary>
-        <ol>
-          <li>通过 <b>https://</b> 或 <b>http://localhost</b> 访问本页。</li>
-          <li>若本页在 <code>&lt;iframe&gt;</code> 中，请在父页添加 <code>allow="camera; microphone; autoplay"</code>（避免 <code>sandbox</code> 限制）。</li>
-          <li>检查地址栏权限是否被“永久拒绝”，允许后点“重试”。</li>
-          <li>关闭占用摄像头的软件（会议/录屏等）。</li>
-          <li>受限环境先点 <b>“使用演示源”</b> 验证逻辑。</li>
-        </ol>
-      </details>
-    </div>
+
+    <!-- 手动微调（UI 占位；未来把参数 POST 给后端 /api/params 即可） -->
+    <section class="panel">
+      <div class="row">
+        <label class="switch"><input type="checkbox" id="autoFit" checked> <span>Auto-fit</span></label>
+        <button class="btn" id="btnReset" type="button">Reset</button>
+        <button class="btn" id="btnExport" type="button">Export params</button>
+      </div>
+      <div class="grid">
+        <div class="ctrl"><label>Scale <output id="oScale">1.00×</output></label><input id="sScale" type="range" min="0.60" max="2.00" step="0.01" value="1.00"></div>
+        <div class="ctrl"><label>Width <output id="oScaleX">1.00×</output></label><input id="sScaleX" type="range" min="0.60" max="2.00" step="0.01" value="1.00"></div>
+        <div class="ctrl"><label>Height <output id="oScaleY">1.00×</output></label><input id="sScaleY" type="range" min="0.60" max="2.00" step="0.01" value="1.00"></div>
+        <div class="ctrl"><label>Shift (↔) <output id="oShiftT">0.00</output></label><input id="sShiftT" type="range" min="-0.50" max="0.50" step="0.005" value="0.00"></div>
+        <div class="ctrl"><label>Offset (↕) <output id="oOffsetN">0.00</output></label><input id="sOffsetN" type="range" min="-0.50" max="0.50" step="0.005" value="0.00"></div>
+        <div class="ctrl"><label>Temple rot <output id="oTempleRot">5.0°</output></label><input id="sTempleRot" type="range" min="-15" max="30" step="0.5" value="5"></div>
+      </div>
+    </section>
   </main>
 
-  <footer>
-    <div class="hint">提示：本地需用 <code>https</code> 或 <code>localhost</code> 才能请求摄像头权限。</div>
-    <div>Day 1 目标：实时画面 + 覆盖层就绪 <span id="tests" class="tests"></span></div>
+  <footer style="padding:10px 16px;color:#a8b3cf">
+    提示：WebCam 仅在 <b>HTTPS</b> 或 <b>http://localhost</b> 下可用；Server 模式只需后端提供 <code>/stream.mjpg</code>。
   </footer>
 </div>
 
 <script>
 (() => {
   const video = document.getElementById('cam');
-  const canvas = document.getElementById('overlay');
-  const ctx = canvas.getContext('2d');
+  const img   = document.getElementById('mjpeg');
+  const canvas= document.getElementById('overlay');
+  const ctx   = canvas.getContext('2d');
   const startBtn = document.getElementById('start');
   const stopBtn  = document.getElementById('stop');
-  const demoBtn  = document.getElementById('demo');
-  const retryBtn = document.getElementById('retry');
-  const facingSel = document.getElementById('facing');
-  const permBadge = document.getElementById('perm');
-  const fpsBadge  = document.getElementById('fps');
-  const resBadge  = document.getElementById('res');
-  const envBadge  = document.getElementById('env');
-  const testsEl   = document.getElementById('tests');
+  const snapBtn  = document.getElementById('snap');
+  const permBadge= document.getElementById('perm');
+  const fpsBadge = document.getElementById('fps');
+  const resBadge = document.getElementById('res');
+  const envBadge = document.getElementById('env');
+  const btnA = document.getElementById('btnFrameA');
+  const btnB = document.getElementById('btnFrameB');
+  const btnC = document.getElementById('btnFrameC');
+  const frameBadge = document.getElementById('frameBadge');
+  const srcWebcam  = document.getElementById('srcWebcam');
+  const srcServer  = document.getElementById('srcServer');
 
-  let stream = null;
-  let rafId = null;
-  let frames = 0, lastFpsUpdate = performance.now(), fps = 0;
+  // 状态
+  let mode = 'webcam'; // 'webcam' | 'server'
+  let stream = null, raf = 0, fps=0, frames=0, last=performance.now();
 
-  function statusOk(msg){ permBadge.textContent = msg; permBadge.className = 'badge ok'; }
-  function statusErr(msg){ permBadge.textContent = msg; permBadge.className = 'badge err'; }
-  function statusInfo(msg){ permBadge.textContent = msg; permBadge.className = 'badge'; }
+  // UI 辅助
+  function setFrame(f){
+    frameBadge.textContent = 'Frame: '+f;
+    [btnA,btnB,btnC].forEach(b=>b.classList.remove('active'));
+    ({A:btnA,B:btnB,C:btnC}[f]).classList.add('active');
+    // 可选：通知后端（若实现了 /api/frame）
+    fetch('/api/frame', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({frame:f})}).catch(()=>{});
+  }
+  btnA.onclick=()=>setFrame('A'); btnB.onclick=()=>setFrame('B'); btnC.onclick=()=>setFrame('C');
 
-  // —— 安全环境检测：非 HTTPS / 非 localhost 时，禁用摄像头按钮并提示 —— //
-  const insecure = (location.protocol !== 'https:' && location.hostname !== 'localhost');
-  if (insecure){
-    envBadge.style.display = 'inline-block';
-    envBadge.textContent = '非安全环境：请用 HTTPS 或 localhost 运行';
-    startBtn.disabled = true; // 防止在不支持的环境下继续触发错误
+  function setSource(m){
+    mode = m;
+    srcWebcam.classList.toggle('active', m==='webcam');
+    srcServer.classList.toggle('active', m==='server');
+    if (m==='webcam'){ img.style.display='none'; video.style.display='block'; }
+    else            { video.style.display='none'; img.style.display='block'; }
+  }
+  srcWebcam.onclick=()=>setSource('webcam');
+  srcServer.onclick=()=>setSource('server');
+
+  function setRunning(r){
+    startBtn.disabled = r;
+    stopBtn.disabled  = !r;
+    snapBtn.disabled  = !r;
   }
 
-  // UI 状态切换
-  function setUIRunning(running){
-    startBtn.disabled = running || insecure;
-    stopBtn.disabled = !running;
-    facingSel.disabled = running;
-    retryBtn.disabled = running;
-  }
-
-  function resizeToVideo(){
-    const w = video.videoWidth | 0; const h = video.videoHeight | 0;
-    if (!w || !h) return;
-    if (canvas.width !== w || canvas.height !== h){
-      canvas.width = w; canvas.height = h;
-      resBadge.textContent = `${w} × ${h}`;
+  function resizeTo(el){
+    const w = (el.videoWidth||el.naturalWidth)|0;
+    const h = (el.videoHeight||el.naturalHeight)|0;
+    if (!w||!h) return;
+    if (canvas.width!==w||canvas.height!==h){
+      canvas.width=w; canvas.height=h; resBadge.textContent = `${w} × ${h}`;
     }
   }
 
   function drawOverlay(){
-    resizeToVideo();
+    const el = (mode==='webcam') ? video : img;
+    resizeTo(el);
     ctx.clearRect(0,0,canvas.width,canvas.height);
-
-    // Day 1: 仅画对齐辅助线，后续替换为眼镜叠层
-    ctx.save();
-    ctx.globalAlpha = 0.7;
-    ctx.strokeStyle = 'rgba(255,255,255,.35)';
-    ctx.lineWidth = 1;
-    const w = canvas.width, h = canvas.height;
-    for (let i=1;i<=2;i++){
-      ctx.beginPath(); ctx.moveTo((w/3)*i,0); ctx.lineTo((w/3)*i,h); ctx.stroke();
-      ctx.beginPath(); ctx.moveTo(0,(h/3)*i); ctx.lineTo(w,(h/3)*i); ctx.stroke();
-    }
+    // 这里先画个网格占位；未来可在这里画“检测/对齐指示”
+    ctx.save(); ctx.globalAlpha=.5; ctx.strokeStyle='rgba(255,255,255,.35)'; const w=canvas.width,h=canvas.height;
+    for(let i=1;i<=2;i++){ ctx.beginPath(); ctx.moveTo((w/3)*i,0); ctx.lineTo((w/3)*i,h); ctx.stroke();
+                           ctx.beginPath(); ctx.moveTo(0,(h/3)*i); ctx.lineTo(w,(h/3)*i); ctx.stroke(); }
     ctx.restore();
-
-    // FPS 计算
-    frames++;
-    const now = performance.now();
-    if (now - lastFpsUpdate >= 500){
-      fps = Math.round( (frames * 1000) / (now - lastFpsUpdate) );
-      fpsBadge.textContent = `FPS: ${fps}`;
-      lastFpsUpdate = now; frames = 0;
-    }
-    rafId = requestAnimationFrame(drawOverlay);
-  }
-
-  async function getCameraStream(){
-    const facingMode = facingSel.value; // 'user' | 'environment'
-    return await navigator.mediaDevices.getUserMedia({
-      video: { facingMode, width: { ideal: 1280 }, height:{ ideal: 720 } },
-      audio: false
-    });
+    // FPS
+    frames++; const now=performance.now(); if(now-last>500){ fps=Math.round(frames*1000/(now-last)); fpsBadge.textContent=`FPS: ${fps}`; frames=0; last=now; }
+    raf = requestAnimationFrame(drawOverlay);
   }
 
   async function start(){
-    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia){
-      statusErr('该浏览器不支持媒体设备 API');
-      return;
+    setRunning(true); permBadge.textContent='Running'; permBadge.className='badge ok';
+    cancelAnimationFrame(raf); raf = requestAnimationFrame(drawOverlay);
+    if(mode==='webcam'){
+      // HTTPS 或 localhost 才能开摄像头
+      const insecure = (location.protocol!=='https:' && location.hostname!=='localhost');
+      if(insecure){ envBadge.style.display='inline-block'; envBadge.textContent='需要 HTTPS 或 localhost 才能使用摄像头'; setRunning(false); return; }
+      try{
+        stream = await navigator.mediaDevices.getUserMedia({video:{width:{ideal:1280},height:{ideal:720},facingMode:'user'},audio:false});
+        video.srcObject = stream; await video.play();
+      }catch(e){ permBadge.textContent='无法打开摄像头：'+e.name; permBadge.className='badge err'; setRunning(false); }
+    }else{
+      // 指向后端 MJPEG 流
+      img.src = '/stream.mjpg'; // 同源无 CORS 问题
+      // 出错自动重连
+      img.onerror = () => setTimeout(()=>{ img.src = '/stream.mjpg?ts='+Date.now(); }, 800);
     }
-    if (insecure){
-      statusErr('无法开启摄像头：非 HTTPS / localhost');
-      return;
-    }
-    try {
-      statusInfo('请求权限…');
-      const s = await getCameraStream();
-      await startWithStream(s);
-      statusOk('摄像头已开启');
-    } catch (err){
-      console.error(err);
-      handleGetUserMediaError(err);
-    }
-  }
-
-  async function startWithStream(mediaStream){
-    stream = mediaStream;
-    video.srcObject = stream;
-    await video.play(); // 需要用户手势已触发
-    setUIRunning(true);
-    cancelAnimationFrame(rafId); rafId = requestAnimationFrame(drawOverlay);
-  }
-
-  // —— 演示源：不依赖物理摄像头 —— //
-  async function startDemo(){
-    statusInfo('启动演示源…');
-    const off = document.createElement('canvas');
-    off.width = 1280; off.height = 720;
-    const octx = off.getContext('2d');
-    let t0 = performance.now();
-    function tick(){
-      const t = (performance.now() - t0)/1000;
-      octx.fillStyle = '#0b0f19'; octx.fillRect(0,0,off.width,off.height);
-      octx.save();
-      octx.translate(off.width/2, off.height/2);
-      octx.rotate(t*0.5);
-      octx.fillStyle = 'rgba(79,70,229,0.5)';
-      octx.fillRect(-200,-120,400,240);
-      octx.restore();
-      octx.fillStyle = '#e7ecf3';
-      octx.font = '20px system-ui';
-      octx.fillText('Demo Stream (无摄像头模式)', 20, 40);
-      requestAnimationFrame(tick);
-    }
-    tick();
-    const demoStream = off.captureStream(30);
-    await startWithStream(demoStream);
-    statusOk('演示源已开启');
   }
 
   function stop(){
-    try {
-      if (rafId) cancelAnimationFrame(rafId);
-      if (video) { video.pause(); video.srcObject = null; }
-      if (stream){ stream.getTracks().forEach(t => t.stop()); stream = null; }
-      setUIRunning(false);
-      statusInfo('已停止'); fpsBadge.textContent = 'FPS: –'; resBadge.textContent = '– × –';
-    } catch (e){ console.warn(e); }
+    if(raf) cancelAnimationFrame(raf);
+    if(stream){ stream.getTracks().forEach(t=>t.stop()); stream=null; }
+    video.pause(); video.srcObject=null; img.removeAttribute('src');
+    setRunning(false); fpsBadge.textContent='FPS: –'; resBadge.textContent='– × –'; permBadge.textContent='Stopped'; permBadge.className='badge';
   }
 
-  function handleGetUserMediaError(err){
-    const httpsWarn = location.protocol !== 'https:' && location.hostname !== 'localhost';
-    let msg = `无法开启摄像头：${err.name || 'Error'}`;
-    if (err.name === 'NotAllowedError'){
-      msg += '（用户或策略拒绝；请在地址栏启用权限，或使用演示源）';
-    } else if (err.name === 'NotFoundError'){
-      msg += '（未检测到摄像头设备）';
-    } else if (err.name === 'NotReadableError'){
-      msg += '（设备可能被其它应用占用）';
-    } else if (err.name === 'OverconstrainedError'){
-      msg += '（约束不满足，可切换前/后置再试）';
-    }
-    if (httpsWarn) msg += '；请使用 https 或 localhost 访问';
-    statusErr(msg);
-    retryBtn.disabled = false;
+  function snapshot(){
+    const off=document.createElement('canvas');
+    const el = (mode==='webcam') ? video : img;
+    const w=(el.videoWidth||el.naturalWidth)|0, h=(el.videoHeight||el.naturalHeight)|0;
+    if(!w||!h){ alert('未就绪'); return; }
+    off.width=w; off.height=h; const o=off.getContext('2d');
+    // 按镜像画入
+    o.save(); o.translate(w,0); o.scale(-1,1); o.drawImage(el,0,0,w,h); o.restore();
+    // 叠加 overlay
+    o.drawImage(canvas,0,0,w,h);
+    const a=document.createElement('a'); a.download=`snapshot_${new Date().toISOString().replace(/[:.]/g,'-')}.png`;
+    a.href=off.toDataURL('image/png'); a.click();
   }
 
-  startBtn.addEventListener('click', start);
-  stopBtn.addEventListener('click', stop);
-  demoBtn.addEventListener('click', startDemo);
-  retryBtn.addEventListener('click', () => { stop(); start(); });
+  startBtn.onclick=start; stopBtn.onclick=stop; snapBtn.onclick=snapshot;
+  window.addEventListener('keydown', e => { if(e.key==='s'||e.key==='S') snapshot(); });
 
-  // 权限状态（并非所有浏览器支持）
-  if (navigator.permissions && navigator.permissions.query){
-    navigator.permissions.query({ name: 'camera' }).then(res => {
-      statusInfo(res.state === 'granted' ? '已授权，可开启' : '等待授权…');
-      res.onchange = () => statusInfo(res.state === 'granted' ? '已授权，可开启' : '等待授权…');
-    }).catch(()=>{});
-  }
+  // —— 参数滑块（先只导出/打印；你把它 POST 给 /api/params 即可）——
+  const autoFit=document.getElementById('autoFit'), sScale=document.getElementById('sScale'), sScaleX=document.getElementById('sScaleX'),
+        sScaleY=document.getElementById('sScaleY'), sShiftT=document.getElementById('sShiftT'), sOffsetN=document.getElementById('sOffsetN'),
+        sTempleRot=document.getElementById('sTempleRot'),
+        oScale=document.getElementById('oScale'), oScaleX=document.getElementById('oScaleX'), oScaleY=document.getElementById('oScaleY'),
+        oShiftT=document.getElementById('oShiftT'), oOffsetN=document.getElementById('oOffsetN'), oTempleRot=document.getElementById('oTempleRot'),
+        btnReset=document.getElementById('btnReset'), btnExport=document.getElementById('btnExport');
 
-  // —— 自测用例 —— //
-  async function runSelfTests(){
-    const results = [];
-    function assert(cond, label){
-      results.push({ label, pass: !!cond });
-      console[cond ? 'log' : 'warn'](`[TEST] ${cond?'PASS':'FAIL'} - ${label}`);
-    }
-    await startDemo();
-    await new Promise(r => setTimeout(r, 1200));
-    assert(video.readyState >= 2, 'video 可播放');
-    assert(/\d+\s×\s\d+/.test(resBadge.textContent), '已获得分辨率显示');
-    const fpsNum = parseInt((fpsBadge.textContent.match(/\d+/) || [0])[0], 10);
-    assert(fpsNum >= 15, 'FPS 刷新 >= 15');
-    assert(typeof fpsNum === 'number' && !Number.isNaN(fpsNum), 'overlay 循环在运行');
-    testsEl.innerHTML = results.map(r => `<span class="${r.pass?'pass':'fail'}">[${r.pass?'✓':'✗'}] ${r.label}</span>`).join(' · ');
-  }
-
-  // 新增：权限错误用例
-  function runPermissionTests(){
-    const results = [];
-    function assert(cond, label){
-      results.push({ label, pass: !!cond });
-      console[cond ? 'log' : 'warn'](`[TEST-PERM] ${cond?'PASS':'FAIL'} - ${label}`);
-    }
-    handleGetUserMediaError({ name: 'NotAllowedError' });
-    assert(retryBtn.disabled === false, 'NotAllowed 后启用重试');
-    assert(/拒绝/.test(permBadge.textContent), '错误信息包含拒绝提示');
-    testsEl.innerHTML = (testsEl.innerHTML ? testsEl.innerHTML + ' · ' : '') +
-      results.map(r => `<span class="${r.pass?'pass':'fail'}">[${r.pass?'✓':'✗'}] ${r.label}</span>`).join(' · ');
-  }
-
-  // 新增：非安全上下文用例
-  function runInsecureTests(){
-    if (!insecure){ console.log('[TEST-INSECURE] 跳过：当前是安全上下文'); return; }
-    const results = [];
-    function assert(cond, label){
-      results.push({ label, pass: !!cond });
-      console[cond ? 'log' : 'warn'](`[TEST-INSECURE] ${cond?'PASS':'FAIL'} - ${label}`);
-    }
-    assert(startBtn.disabled === true, '非安全环境下禁用“开启摄像头”');
-    assert(envBadge.style.display !== 'none', '非安全提示可见');
-    testsEl.innerHTML = (testsEl.innerHTML ? testsEl.innerHTML + ' · ' : '') +
-      results.map(r => `<span class="${r.pass?'pass':'fail'}">[${r.pass?'✓':'✗'}] ${r.label}</span>`).join(' · ');
-  }
-
-  if (location.hash.includes('test')){
-    runSelfTests();
-  }
-  if (location.hash.includes('test-perm')){
-    runPermissionTests();
-  }
-  if (location.hash.includes('test-insecure')){
-    runInsecureTests();
-  }
+  const defaults={autoFit:true,scale:1,scaleX:1,scaleY:1,shiftT:0,offsetN:0,templeRotDeg:5};
+  function read(){ return {autoFit:autoFit.checked,scale:+sScale.value,scaleX:+sScaleX.value,scaleY:+sScaleY.value,shiftT:+sShiftT.value,offsetN:+sOffsetN.value,templeRotDeg:+sTempleRot.value}; }
+  function write(v){ autoFit.checked=v.autoFit; sScale.value=v.scale; sScaleX.value=v.scaleX; sScaleY.value=v.scaleY; sShiftT.value=v.shiftT; sOffsetN.value=v.offsetN; sTempleRot.value=v.templeRotDeg; out(); }
+  function out(){ const v=read(); oScale.textContent=v.scale.toFixed(2)+'×'; oScaleX.textContent=v.scaleX.toFixed(2)+'×'; oScaleY.textContent=v.scaleY.toFixed(2)+'×';
+                  oShiftT.textContent=v.shiftT.toFixed(3); oOffsetN.textContent=v.offsetN.toFixed(3); oTempleRot.textContent=v.templeRotDeg.toFixed(1)+'°';
+                  // 可选：发送到后端
+                  fetch('/api/params',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(v)}).catch(()=>{}); }
+  [autoFit,sScale,sScaleX,sScaleY,sShiftT,sOffsetN,sTempleRot].forEach(el=>el.addEventListener('input',out));
+  btnReset.onclick=()=>write(defaults);
+  btnExport.onclick=()=>alert(JSON.stringify(read(),null,2));
+  write(defaults);
 })();
 </script>
 </body>
