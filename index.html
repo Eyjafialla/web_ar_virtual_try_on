@@ -1,239 +1,288 @@
 <!doctype html>
 <html lang="zh-CN">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <title>Web AR Try-On</title>
-  <style>
-    :root{--bg:#0b0f19;--panel:#121828;--text:#e7ecf3;--muted:#98a2b3;--accent:#4f46e5}
-    *{box-sizing:border-box} html,body{height:100%}
-    body{margin:0;background:radial-gradient(100% 100% at 50% 0%,#0f172a 0%,#0b0f19 100%);color:var(--text);font:14px/1.4 system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial}
-    .wrap{display:grid;grid-template-rows:auto 1fr auto;min-height:100%}
-    header{position:sticky;top:0;z-index:10;display:flex;align-items:center;gap:12px;padding:10px 16px;background:rgba(18,24,40,.8);backdrop-filter:blur(10px);border-bottom:1px solid rgba(255,255,255,.06)}
-    header .brand{font-weight:700} .spacer{flex:1}
-    header button,header select{appearance:none;border:1px solid rgba(255,255,255,.12);background:#0f1424;color:var(--text);padding:8px 12px;border-radius:10px;font-weight:600;cursor:pointer}
-    header button:hover{border-color:rgba(255,255,255,.22)} header button:disabled{opacity:.6;cursor:not-allowed}
-    .seg{display:flex;border:1px solid rgba(255,255,255,.12);border-radius:10px;overflow:hidden}
-    .seg button{border:0;background:#0f1424;color:var(--text);padding:8px 12px;font-weight:600;cursor:pointer}
-    .seg button+button{border-left:1px solid rgba(255,255,255,.12)} .seg button.active{background:var(--accent);color:#fff}
-    .stage{position:relative;display:grid;place-items:center;padding:12px;height:100%}
-    .viewport{position:relative;width:min(100%,960px);aspect-ratio:16/9;background:#0a0f1f;border-radius:16px;overflow:hidden;border:1px solid rgba(255,255,255,.06)}
-    video, img.stream {position:absolute;inset:0;width:100%;height:100%;object-fit:cover;transform:scaleX(-1)}
-    canvas#overlay{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
-    .statusbar{position:absolute;inset:auto 12px 12px 12px;display:flex;gap:8px;align-items:center;flex-wrap:wrap}
-    .badge{padding:6px 10px;border-radius:20px;background:rgba(255,255,255,.06);color:var(--muted);border:1px solid rgba(255,255,255,.1)}
-    .badge.ok{color:#10b981;background:rgba(16,185,129,.12);border-color:rgba(16,185,129,.3)}
-    .badge.err{color:#ef4444;background:rgba(239,68,68,.12);border-color:rgba(239,68,68,.3)}
-    .badge.warn{color:#f59e0b;background:rgba(245,158,11,.12);border-color:rgba(245,158,11,.3)}
-    .panel{width:min(100%,960px);margin:10px auto 0;background:rgba(18,24,40,.7);border:1px solid rgba(255,255,255,.08);border-radius:14px;padding:12px;display:grid;gap:10px}
-    .grid{display:grid;grid-template-columns:repeat(6,1fr);gap:10px} @media(max-width:920px){.grid{grid-template-columns:repeat(2,1fr)}}
-    .ctrl{border:1px solid rgba(255,255,255,.08);border-radius:12px;padding:10px;background:#0f1424}
-    .ctrl label{display:flex;align-items:center;justify-content:space-between;font-weight:600}
-    .ctrl output{color:#a8b3cf;font-variant-numeric:tabular-nums}
-    .ctrl input[type=range]{width:100%;margin-top:8px}
-    .row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
-    .row .switch{display:inline-flex;align-items:center;gap:8px;padding:8px 10px;border:1px solid rgba(255,255,255,.12);border-radius:999px;background:#0f1424}
-    .row .switch input{accent-color:var(--accent);transform:scale(1.1)}
-    .row .btn{padding:8px 12px;border-radius:10px;border:1px solid rgba(255,255,255,.12);background:#0f1424;color:var(--text);font-weight:600;cursor:pointer}
-  </style>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Web AR Try-On</title>
+<style>
+:root{--bg:#0b0f19;--panel:#0f1424;--text:#e7ecf3;--muted:#98a2b3;--accent:#7c3aed}
+*{box-sizing:border-box} html,body{height:100%}
+body{margin:0;background:#0b0f19;color:var(--text);font:14px/1.45 system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial}
+header{display:flex;gap:12px;align-items:center;padding:10px 14px;background:#0e1426;border-bottom:1px solid rgba(255,255,255,.08)}
+.brand{font-weight:700}.spacer{flex:1}
+.seg{display:flex;gap:6px}
+button, .seg button{border:1px solid rgba(255,255,255,.14);background:#111831;color:#fff;border-radius:10px;padding:8px 12px;cursor:pointer}
+button.active, .seg button.active{background:var(--accent);border-color:transparent}
+.thumbs{display:flex;gap:8px;margin-left:4px}
+.thumb{width:64px;height:36px;object-fit:contain;background:#111831;border:1px solid rgba(255,255,255,.15);border-radius:8px;padding:2px;cursor:pointer;opacity:.85;transition:.15s}
+.thumb:hover{opacity:1}
+.thumb.active{border-color:var(--accent);box-shadow:0 0 0 2px rgba(124,58,237,.35) inset;opacity:1}
+.currThumb{width:80px;height:44px;object-fit:contain;background:#111831;border-radius:8px;border:1px solid rgba(255,255,255,.12);padding:2px}
+.badge{display:inline-block;padding:6px 10px;border-radius:999px;background:#1f2937;color:#cbd5e1}
+.badge.ok{background:#064e3b;color:#d1fae5}
+main{display:grid;grid-template-columns:1fr 420px;gap:16px;padding:12px}
+.stage{display:grid;place-items:center;min-height:70vh;background:#0e1426;border-radius:12px}
+.panel{background:#0e1426;border-radius:12px;padding:12px;display:grid;gap:12px;height:max-content}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.slider{display:grid;grid-template-columns:120px 1fr 64px;gap:8px;align-items:center}
+.group{border:1px solid rgba(255,255,255,.1);border-radius:12px;padding:10px;background:#0f1424}
+.group h4{margin:0 0 6px 0;font-size:13px;color:#cbd5e1}
+img{max-width:100%;height:auto}
+.hint{color:#94a3b8;font-size:12px}
+</style>
 </head>
 <body>
-<div class="wrap">
-  <header>
-    <div class="brand">Web AR Try-On</div>
+<header>
+  <div class="brand">Web AR Try-On</div>
 
-    <!-- Frame 切换（占位，后端未来可接 /api/frame） -->
-    <div class="seg" id="frameSwitcher" role="group" aria-label="Frame switcher">
-      <button id="btnFrameA" class="active" type="button">Frame A</button>
-      <button id="btnFrameB" type="button">Frame B</button>
-      <button id="btnFrameC" type="button">Frame C</button>
+  <!-- 旧的文本按钮还保留（可选），也可只用缩略图 -->
+  <div class="seg">
+    <button id="btnFrameA" class="active">Frame A</button>
+    <button id="btnFrameB">Frame B</button>
+    <button id="btnFrameC">Frame C</button>
+  </div>
+
+  <!-- 可点击缩略图条 -->
+  <div class="thumbs" id="thumbBar">
+    <img src="Frame_A.png" id="thumbA" class="thumb active" data-fid="A" alt="Frame A">
+    <img src="Frame_B.png" id="thumbB" class="thumb" data-fid="B" alt="Frame B">
+    <img src="Frame_C.png" id="thumbC" class="thumb" data-fid="C" alt="Frame C">
+  </div>
+
+  <div class="seg">
+    <button id="srcServer" class="active">Server (MJPEG)</button>
+  </div>
+
+  <div class="spacer"></div>
+
+  <!-- 当前 Frame 缩略图 -->
+  <img id="currThumb" class="currThumb" src="Frame_A.png" alt="Current frame">
+
+  <span id="frameBadge" class="badge">Frame: A</span>
+  <span id="permBadge" class="badge">Ready</span>
+  <span id="fpsBadge" class="badge">FPS: –</span>
+  <span id="resBadge" class="badge">– × –</span>
+  <button id="start">Start</button>
+  <button id="stop" disabled>Stop</button>
+  <button id="snap">📸 Snapshot</button>
+</header>
+
+<main>
+  <div class="stage">
+    <img id="mjpeg" alt="MJPEG stream"/>
+  </div>
+
+  <div class="panel">
+    <div class="row">
+      <label><input type="checkbox" id="autoHide"> Auto-hide temples</label>
+      <label><input type="checkbox" id="occlusion"> Occlusion (arms behind face)</label>
+    </div>
+    <div class="row"><span class="badge">Pivot: Eye outer (263/33)</span></div>
+
+    <div class="group">
+      <h4>Global</h4>
+      <div class="slider"><label>Scale</label> <input id="sScale"  type="range" min="0.6" max="1.8" step="0.01" value="1.0"><output id="oScale">1.00×</output></div>
+      <div class="slider"><label>Width</label> <input id="sScaleX" type="range" min="0.6" max="1.8" step="0.01" value="1.0"><output id="oScaleX">1.00×</output></div>
+      <div class="slider"><label>Height</label><input id="sScaleY" type="range" min="0.6" max="1.8" step="0.01" value="1.0"><output id="oScaleY">1.00×</output></div>
+      <div class="slider"><label>Shift (↔)</label><input id="sShiftT" type="range" min="-0.5" max="0.5" step="0.005" value="0"><output id="oShiftT">0.000</output></div>
+      <div class="slider"><label>Offset (↕)</label><input id="sOffsetN" type="range" min="-0.5" max="0.5" step="0.005" value="0"><output id="oOffsetN">0.000</output></div>
+      <div class="slider"><label>Temple rot</label><input id="sTempleRot" type="range" min="-20" max="20" step="0.5" value="5"><output id="oTempleRot">5.0°</output></div>
+      <div class="row"><button id="btnReset">Reset</button><button id="btnExport">Export params</button></div>
+      <div class="hint">Global 作用于前框与两侧镜臂；下面镜臂滑杆仅做微调。</div>
     </div>
 
-    <!-- NEW: 来源切换 -->
-    <div class="seg" id="sourceSwitcher" role="group" aria-label="Source switcher" style="margin-left:8px">
-      <button id="srcWebcam" class="active" type="button">WebCam</button>
-      <button id="srcServer" type="button">Server (MJPEG)</button>
+    <div class="group">
+      <h4>Right temple override（屏幕右 → 后端 L）</h4>
+      <div class="slider"><label>Right scale</label><input id="sTempleScaleL" type="range" min="0.5" max="1.8" step="0.01" value="1"><output id="oTempleScaleL">1.00×</output></div>
+      <div class="slider"><label>Right shift (↔)</label><input id="sTempleShiftTL" type="range" min="-0.6" max="0.6" step="0.005" value="0"><output id="oTempleShiftTL">0.000</output></div>
+      <div class="slider"><label>Right offset (↕)</label><input id="sTempleOffsetNL" type="range" min="-0.6" max="0.6" step="0.005" value="0"><output id="oTempleOffsetNL">0.000</output></div>
+      <div class="slider"><label>Right rot</label><input id="sTempleRotL" type="range" min="-25" max="25" step="0.5" value="5"><output id="oTempleRotL">5.0°</output></div>
     </div>
 
-    <div class="spacer"></div>
-    <button id="start">Start</button>
-    <button id="stop" disabled>Stop</button>
-    <button id="snap" disabled>📸 Snapshot</button>
-    <div id="frameBadge" class="badge">Frame: A</div>
-  </header>
-
-  <main class="stage">
-    <div class="viewport">
-      <video id="cam" playsinline muted></video>
-      <img id="mjpeg" class="stream" alt="" style="display:none">
-      <canvas id="overlay"></canvas>
-      <div class="statusbar">
-        <div id="perm" class="badge">Ready</div>
-        <div id="fps" class="badge">FPS: –</div>
-        <div id="res" class="badge">– × –</div>
-        <div id="env" class="badge warn" style="display:none"></div>
-      </div>
+    <div class="group">
+      <h4>Left temple override（屏幕左 → 后端 R）</h4>
+      <div class="slider"><label>Left scale</label><input id="sTempleScaleR" type="range" min="0.5" max="1.8" step="0.01" value="1"><output id="oTempleScaleR">1.00×</output></div>
+      <div class="slider"><label>Left shift (↔)</label><input id="sTempleShiftTR" type="range" min="-0.6" max="0.6" step="0.005" value="0"><output id="oTempleShiftTR">0.000</output></div>
+      <div class="slider"><label>Left offset (↕)</label><input id="sTempleOffsetNR" type="range" min="-0.6" max="0.6" step="0.005" value="0"><output id="oTempleOffsetNR">0.000</output></div>
+      <div class="slider"><label>Left rot</label><input id="sTempleRotR" type="range" min="-25" max="25" step="0.5" value="-5"><output id="oTempleRotR">-5.0°</output></div>
     </div>
-
-    <!-- 手动微调（UI 占位；未来把参数 POST 给后端 /api/params 即可） -->
-    <section class="panel">
-      <div class="row">
-        <label class="switch"><input type="checkbox" id="autoFit" checked> <span>Auto-fit</span></label>
-        <button class="btn" id="btnReset" type="button">Reset</button>
-        <button class="btn" id="btnExport" type="button">Export params</button>
-      </div>
-      <div class="grid">
-        <div class="ctrl"><label>Scale <output id="oScale">1.00×</output></label><input id="sScale" type="range" min="0.60" max="2.00" step="0.01" value="1.00"></div>
-        <div class="ctrl"><label>Width <output id="oScaleX">1.00×</output></label><input id="sScaleX" type="range" min="0.60" max="2.00" step="0.01" value="1.00"></div>
-        <div class="ctrl"><label>Height <output id="oScaleY">1.00×</output></label><input id="sScaleY" type="range" min="0.60" max="2.00" step="0.01" value="1.00"></div>
-        <div class="ctrl"><label>Shift (↔) <output id="oShiftT">0.00</output></label><input id="sShiftT" type="range" min="-0.50" max="0.50" step="0.005" value="0.00"></div>
-        <div class="ctrl"><label>Offset (↕) <output id="oOffsetN">0.00</output></label><input id="sOffsetN" type="range" min="-0.50" max="0.50" step="0.005" value="0.00"></div>
-        <div class="ctrl"><label>Temple rot <output id="oTempleRot">5.0°</output></label><input id="sTempleRot" type="range" min="-15" max="30" step="0.5" value="5"></div>
-      </div>
-    </section>
-  </main>
-
-  <footer style="padding:10px 16px;color:#a8b3cf">
-    提示：WebCam 仅在 <b>HTTPS</b> 或 <b>http://localhost</b> 下可用；Server 模式只需后端提供 <code>/stream.mjpg</code>。
-  </footer>
-</div>
+  </div>
+</main>
 
 <script>
 (() => {
-  const video = document.getElementById('cam');
-  const img   = document.getElementById('mjpeg');
-  const canvas= document.getElementById('overlay');
-  const ctx   = canvas.getContext('2d');
-  const startBtn = document.getElementById('start');
-  const stopBtn  = document.getElementById('stop');
-  const snapBtn  = document.getElementById('snap');
-  const permBadge= document.getElementById('perm');
-  const fpsBadge = document.getElementById('fps');
-  const resBadge = document.getElementById('res');
-  const envBadge = document.getElementById('env');
+  const img = document.getElementById('mjpeg');
+
+  // 顶部控件
   const btnA = document.getElementById('btnFrameA');
   const btnB = document.getElementById('btnFrameB');
   const btnC = document.getElementById('btnFrameC');
   const frameBadge = document.getElementById('frameBadge');
-  const srcWebcam  = document.getElementById('srcWebcam');
-  const srcServer  = document.getElementById('srcServer');
+  const startBtn = document.getElementById('start');
+  const stopBtn  = document.getElementById('stop');
+  const snapBtn  = document.getElementById('snap');
+  const fpsBadge = document.getElementById('fpsBadge');
+  const resBadge = document.getElementById('resBadge');
+  const permBadge= document.getElementById('permBadge');
+  const currThumb= document.getElementById('currThumb');
+  const thumbBar = document.getElementById('thumbBar');
 
-  // 状态
-  let mode = 'webcam'; // 'webcam' | 'server'
-  let stream = null, raf = 0, fps=0, frames=0, last=performance.now();
+  // 复选框
+  const autoHide  = document.getElementById('autoHide');
+  const occlusion = document.getElementById('occlusion');
 
-  // UI 辅助
-  function setFrame(f){
-    frameBadge.textContent = 'Frame: '+f;
-    [btnA,btnB,btnC].forEach(b=>b.classList.remove('active'));
-    ({A:btnA,B:btnB,C:btnC}[f]).classList.add('active');
-    // 可选：通知后端（若实现了 /api/frame）
-    fetch('/api/frame', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({frame:f})}).catch(()=>{});
-  }
-  btnA.onclick=()=>setFrame('A'); btnB.onclick=()=>setFrame('B'); btnC.onclick=()=>setFrame('C');
+  // 全局滑杆
+  const sScale = s('sScale'), sScaleX=s('sScaleX'), sScaleY=s('sScaleY'),
+        sShiftT=s('sShiftT'), sOffsetN=s('sOffsetN'), sTempleRot=s('sTempleRot');
 
-  function setSource(m){
-    mode = m;
-    srcWebcam.classList.toggle('active', m==='webcam');
-    srcServer.classList.toggle('active', m==='server');
-    if (m==='webcam'){ img.style.display='none'; video.style.display='block'; }
-    else            { video.style.display='none'; img.style.display='block'; }
-  }
-  srcWebcam.onclick=()=>setSource('webcam');
-  srcServer.onclick=()=>setSource('server');
+  // 镜臂滑杆（屏幕右→后端L；屏幕左→后端R）
+  const sTempleScaleL=s('sTempleScaleL'), sTempleShiftTL=s('sTempleShiftTL'),
+        sTempleOffsetNL=s('sTempleOffsetNL'), sTempleRotL=s('sTempleRotL');
+  const sTempleScaleR=s('sTempleScaleR'), sTempleShiftTR=s('sTempleShiftTR'),
+        sTempleOffsetNR=s('sTempleOffsetNR'), sTempleRotR=s('sTempleRotR');
+
+  function s(id){ return document.getElementById(id); }
+  function o(id){ return document.getElementById(id); }
 
   function setRunning(r){
-    startBtn.disabled = r;
-    stopBtn.disabled  = !r;
-    snapBtn.disabled  = !r;
+    startBtn.disabled = r; stopBtn.disabled = !r; snapBtn.disabled = !r;
   }
 
-  function resizeTo(el){
-    const w = (el.videoWidth||el.naturalWidth)|0;
-    const h = (el.videoHeight||el.naturalHeight)|0;
-    if (!w||!h) return;
-    if (canvas.width!==w||canvas.height!==h){
-      canvas.width=w; canvas.height=h; resBadge.textContent = `${w} × ${h}`;
+  function api(p){ return p; }
+
+  function highlight(fid){
+    // 文本按钮高亮
+    [btnA,btnB,btnC].forEach(b=>b.classList.remove('active'));
+    ({A:btnA,B:btnB,C:btnC}[fid]).classList.add('active');
+    // 缩略图高亮
+    [...thumbBar.querySelectorAll('.thumb')].forEach(t=>t.classList.remove('active'));
+    ({A:thumbA,B:thumbB,C:thumbC}[fid]).classList.add('active');
+    // 当前缩略图
+    currThumb.src = `Frame_${fid}.png`;
+    frameBadge.textContent = 'Frame: ' + fid;
+  }
+
+  function setFrame(fid, silent=false){
+    highlight(fid);
+    if (!silent) {
+      fetch(api('/api/switch_frame'), {method:'POST', headers:{'Content-Type':'application/json'},
+             body:JSON.stringify({id:fid})}).catch(()=>{});
     }
   }
 
-  function drawOverlay(){
-    const el = (mode==='webcam') ? video : img;
-    resizeTo(el);
-    ctx.clearRect(0,0,canvas.width,canvas.height);
-    // 这里先画个网格占位；未来可在这里画“检测/对齐指示”
-    ctx.save(); ctx.globalAlpha=.5; ctx.strokeStyle='rgba(255,255,255,.35)'; const w=canvas.width,h=canvas.height;
-    for(let i=1;i<=2;i++){ ctx.beginPath(); ctx.moveTo((w/3)*i,0); ctx.lineTo((w/3)*i,h); ctx.stroke();
-                           ctx.beginPath(); ctx.moveTo(0,(h/3)*i); ctx.lineTo(w,(h/3)*i); ctx.stroke(); }
-    ctx.restore();
-    // FPS
-    frames++; const now=performance.now(); if(now-last>500){ fps=Math.round(frames*1000/(now-last)); fpsBadge.textContent=`FPS: ${fps}`; frames=0; last=now; }
-    raf = requestAnimationFrame(drawOverlay);
+  function readGlobal(){
+    return {
+      scale:+sScale.value, scaleX:+sScaleX.value, scaleY:+sScaleY.value,
+      shiftT:+sShiftT.value, offsetN:+sOffsetN.value, templeRotDeg:+sTempleRot.value,
+      occlusion: occlusion.checked, autoHideTemples: autoHide.checked,
+      pivotMode: 'eye_outer'
+    };
   }
-
-  async function start(){
-    setRunning(true); permBadge.textContent='Running'; permBadge.className='badge ok';
-    cancelAnimationFrame(raf); raf = requestAnimationFrame(drawOverlay);
-    if(mode==='webcam'){
-      // HTTPS 或 localhost 才能开摄像头
-      const insecure = (location.protocol!=='https:' && location.hostname!=='localhost');
-      if(insecure){ envBadge.style.display='inline-block'; envBadge.textContent='需要 HTTPS 或 localhost 才能使用摄像头'; setRunning(false); return; }
-      try{
-        stream = await navigator.mediaDevices.getUserMedia({video:{width:{ideal:1280},height:{ideal:720},facingMode:'user'},audio:false});
-        video.srcObject = stream; await video.play();
-      }catch(e){ permBadge.textContent='无法打开摄像头：'+e.name; permBadge.className='badge err'; setRunning(false); }
-    }else{
-      // 指向后端 MJPEG 流
-      img.src = '/stream.mjpg'; // 同源无 CORS 问题
-      // 出错自动重连
-      img.onerror = () => setTimeout(()=>{ img.src = '/stream.mjpg?ts='+Date.now(); }, 800);
-    }
+  function readLeft(){
+    return {
+      templeScaleL:+sTempleScaleL.value,
+      templeShiftTL:+sTempleShiftTL.value,
+      templeOffsetNL:+sTempleOffsetNL.value,
+      templeRotL:+sTempleRotL.value
+    };
   }
+  function readRight(){
+    return {
+      templeScaleR:+sTempleScaleR.value,
+      templeShiftTR:+sTempleShiftTR.value,
+      templeOffsetNR:+sTempleOffsetNR.value,
+      templeRotR:+sTempleRotR.value
+    };
+  }
+  function updateOutputs(){
+    o('oScale').textContent   = (+sScale.value).toFixed(2)+'×';
+    o('oScaleX').textContent  = (+sScaleX.value).toFixed(2)+'×';
+    o('oScaleY').textContent  = (+sScaleY.value).toFixed(2)+'×';
+    o('oShiftT').textContent  = (+sShiftT.value).toFixed(3);
+    o('oOffsetN').textContent = (+sOffsetN.value).toFixed(3);
+    o('oTempleRot').textContent = (+sTempleRot.value).toFixed(1)+'°';
 
-  function stop(){
+    o('oTempleScaleL').textContent = (+sTempleScaleL.value).toFixed(2)+'×';
+    o('oTempleShiftTL').textContent= (+sTempleShiftTL.value).toFixed(3);
+    o('oTempleOffsetNL').textContent=(+sTempleOffsetNL.value).toFixed(3);
+    o('oTempleRotL').textContent   = (+sTempleRotL.value).toFixed(1)+'°';
+
+    o('oTempleScaleR').textContent = (+sTempleScaleR.value).toFixed(2)+'×';
+    o('oTempleShiftTR').textContent= (+sTempleShiftTR.value).toFixed(3);
+    o('oTempleOffsetNR').textContent=(+sTempleOffsetNR.value).toFixed(3);
+    o('oTempleRotR').textContent   = (+sTempleRotR.value).toFixed(1)+'°';
+  }
+  function postParams(extra){
+    const body = Object.assign({}, readGlobal(), readLeft(), readRight(), extra||{});
+    fetch(api('/api/params'), {method:'POST', headers:{'Content-Type':'application/json'},
+      body:JSON.stringify(body)}).catch(()=>{});
+  }
+  function pushAll(){ updateOutputs(); postParams(); }
+
+  // 事件绑定
+  [autoHide, occlusion,
+   sScale,sScaleX,sScaleY,sShiftT,sOffsetN,sTempleRot,
+   sTempleScaleL,sTempleShiftTL,sTempleOffsetNL,sTempleRotL,
+   sTempleScaleR,sTempleShiftTR,sTempleOffsetNR,sTempleRotR
+  ].forEach(el => el.addEventListener('input', ()=>{ updateOutputs(); postParams(); }));
+
+  // Reset & Export
+  document.getElementById('btnReset').onclick = () => {
+    sScale.value=1; sScaleX.value=1; sScaleY.value=1; sShiftT.value=0; sOffsetN.value=0; sTempleRot.value=5;
+    sTempleScaleL.value=1; sTempleShiftTL.value=0; sTempleOffsetNL.value=0; sTempleRotL.value=5;
+    sTempleScaleR.value=1; sTempleShiftTR.value=0; sTempleOffsetNR.value=0; sTempleRotR.value=-5;
+    autoHide.checked=false; occlusion.checked=false;
+    pushAll();
+  };
+  document.getElementById('btnExport').onclick = () => {
+    const txt = JSON.stringify(Object.assign({}, readGlobal(), readLeft(), readRight()), null, 2);
+    navigator.clipboard.writeText(txt); alert('已复制参数到剪贴板');
+  };
+
+  // 文本按钮切换
+  btnA.onclick = ()=>setFrame('A');
+  btnB.onclick = ()=>setFrame('B');
+  btnC.onclick = ()=>setFrame('C');
+
+  // 缩略图点击切换
+  thumbBar.addEventListener('click', (e)=>{
+    const t = e.target.closest('.thumb'); if(!t) return;
+    setFrame(t.dataset.fid);
+  });
+
+  // 启停与快照
+  let raf=0, frames=0, last=performance.now();
+  function loop(){
+    frames++; const now=performance.now();
+    if(now-last>500){ const fps=Math.round(frames*1000/(now-last)); fpsBadge.textContent=`FPS: ${fps}`; frames=0; last=now; }
+    const w=img.naturalWidth|0, h=img.naturalHeight|0; if(w&&h) document.getElementById('resBadge').textContent=`${w} × ${h}`;
+    raf = requestAnimationFrame(loop);
+  }
+  document.getElementById('start').onclick = () => {
+    setRunning(true);
+    permBadge.textContent='Running'; permBadge.classList.add('ok');
+    cancelAnimationFrame(raf); raf=requestAnimationFrame(loop);
+    img.onerror = () => setTimeout(()=>{ img.src = '/stream.mjpg?ts='+Date.now(); }, 800);
+    img.src = '/stream.mjpg?ts='+Date.now();
+    pushAll();
+  };
+  document.getElementById('stop').onclick = () => {
     if(raf) cancelAnimationFrame(raf);
-    if(stream){ stream.getTracks().forEach(t=>t.stop()); stream=null; }
-    video.pause(); video.srcObject=null; img.removeAttribute('src');
-    setRunning(false); fpsBadge.textContent='FPS: –'; resBadge.textContent='– × –'; permBadge.textContent='Stopped'; permBadge.className='badge';
-  }
+    img.removeAttribute('src');
+    setRunning(false);
+    permBadge.textContent='Stopped'; permBadge.classList.remove('ok');
+  };
+  document.getElementById('snap').onclick = () => {
+    const a=document.createElement('a'); a.download=`snapshot_${Date.now()}.jpg`; a.href='/snapshot'; a.click();
+  };
 
-  function snapshot(){
-    const off=document.createElement('canvas');
-    const el = (mode==='webcam') ? video : img;
-    const w=(el.videoWidth||el.naturalWidth)|0, h=(el.videoHeight||el.naturalHeight)|0;
-    if(!w||!h){ alert('未就绪'); return; }
-    off.width=w; off.height=h; const o=off.getContext('2d');
-    // 按镜像画入
-    o.save(); o.translate(w,0); o.scale(-1,1); o.drawImage(el,0,0,w,h); o.restore();
-    // 叠加 overlay
-    o.drawImage(canvas,0,0,w,h);
-    const a=document.createElement('a'); a.download=`snapshot_${new Date().toISOString().replace(/[:.]/g,'-')}.png`;
-    a.href=off.toDataURL('image/png'); a.click();
-  }
-
-  startBtn.onclick=start; stopBtn.onclick=stop; snapBtn.onclick=snapshot;
-  window.addEventListener('keydown', e => { if(e.key==='s'||e.key==='S') snapshot(); });
-
-  // —— 参数滑块（先只导出/打印；你把它 POST 给 /api/params 即可）——
-  const autoFit=document.getElementById('autoFit'), sScale=document.getElementById('sScale'), sScaleX=document.getElementById('sScaleX'),
-        sScaleY=document.getElementById('sScaleY'), sShiftT=document.getElementById('sShiftT'), sOffsetN=document.getElementById('sOffsetN'),
-        sTempleRot=document.getElementById('sTempleRot'),
-        oScale=document.getElementById('oScale'), oScaleX=document.getElementById('oScaleX'), oScaleY=document.getElementById('oScaleY'),
-        oShiftT=document.getElementById('oShiftT'), oOffsetN=document.getElementById('oOffsetN'), oTempleRot=document.getElementById('oTempleRot'),
-        btnReset=document.getElementById('btnReset'), btnExport=document.getElementById('btnExport');
-
-  const defaults={autoFit:true,scale:1,scaleX:1,scaleY:1,shiftT:0,offsetN:0,templeRotDeg:5};
-  function read(){ return {autoFit:autoFit.checked,scale:+sScale.value,scaleX:+sScaleX.value,scaleY:+sScaleY.value,shiftT:+sShiftT.value,offsetN:+sOffsetN.value,templeRotDeg:+sTempleRot.value}; }
-  function write(v){ autoFit.checked=v.autoFit; sScale.value=v.scale; sScaleX.value=v.scaleX; sScaleY.value=v.scaleY; sShiftT.value=v.shiftT; sOffsetN.value=v.offsetN; sTempleRot.value=v.templeRotDeg; out(); }
-  function out(){ const v=read(); oScale.textContent=v.scale.toFixed(2)+'×'; oScaleX.textContent=v.scaleX.toFixed(2)+'×'; oScaleY.textContent=v.scaleY.toFixed(2)+'×';
-                  oShiftT.textContent=v.shiftT.toFixed(3); oOffsetN.textContent=v.offsetN.toFixed(3); oTempleRot.textContent=v.templeRotDeg.toFixed(1)+'°';
-                  // 可选：发送到后端
-                  fetch('/api/params',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(v)}).catch(()=>{}); }
-  [autoFit,sScale,sScaleX,sScaleY,sShiftT,sOffsetN,sTempleRot].forEach(el=>el.addEventListener('input',out));
-  btnReset.onclick=()=>write(defaults);
-  btnExport.onclick=()=>alert(JSON.stringify(read(),null,2));
-  write(defaults);
+  // 初始化：以服务端 state 为准
+  fetch('/api/params').then(r=>r.json()).then(st=>{
+    const fid = (st && st.frameId) || 'A';
+    highlight(fid);
+  }).catch(()=>highlight('A'));
 })();
 </script>
 </body>
 </html>
+
