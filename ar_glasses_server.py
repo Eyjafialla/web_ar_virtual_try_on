@@ -1,12 +1,3 @@
-# -*- coding: utf-8 -*-
-"""
-Web AR Glasses (A/B/C; front/left_arm/right_arm)
-- 只用外眼角 263/33 作为绑定锚点
-- Global(Scale/Width/Height/Shift/Offset/Temple rot) 统一作用：前框 + 两侧镜臂 + 锚点 + 镜臂微调
-- 锚点偏移与镜臂微调随 Global 等比（effX=scale*scaleX, effY=scale*scaleY）
-- 铰链取点自适应(inner/outer/auto)，水平外移随 Scale 轻量自适应
-- 可选遮挡（默认关），MJPEG：/stream.mjpg
-"""
 import os, time, math, threading
 import cv2, numpy as np
 from flask import Flask, Response, request, jsonify, send_from_directory
@@ -14,43 +5,59 @@ import mediapipe as mp
 
 HERE = os.path.dirname(__file__)
 FRAME_DIR = os.path.join(HERE, "frames")
+
 FRAME_IDS = ("A", "B", "C")
 DEFAULT_FRAME_ID = "A"
 
-# —— 粗调参数（可用环境变量覆盖） ——
-# 'auto'：自动挑更靠耳侧（outer）的铰链；也可设 'inner' 或 'outer'
+# ---------- Auto-Fit 分档阈值 ----------
+# r = d/W（外眼角像素距离/画面宽度），粗准即可
+T_SM = float(os.environ.get("AUTO_FIT_T_SM", "0.24"))  # r < T_SM -> S
+T_ML = float(os.environ.get("AUTO_FIT_T_ML", "0.28"))  # T_SM <= r < T_ML -> M，否则 L
+
+# 不同规格的相对倍率（体现不同尺码的相对观感；非 UI 可调）
+SIZE_SCALE = {
+    "S": float(os.environ.get("SIZE_K_S", "0.93")),
+    "M": float(os.environ.get("SIZE_K_M", "1.00")),
+    "L": float(os.environ.get("SIZE_K_L", "1.07")),
+}
+
+# —— 粗调参数（仅内部使用） —— #
 ARM_PIVOT_EDGE = os.environ.get("ARM_PIVOT_EDGE", "auto").lower()
-EYE2TEMPLE_U   = float(os.environ.get("EYE2TEMPLE_U", "0.14"))   # 沿眼线外移比例（相对眼距）
-EYE2TEMPLE_N   = float(os.environ.get("EYE2TEMPLE_N", "-0.02"))  # 法向微调比例
+EYE2TEMPLE_U   = float(os.environ.get("EYE2TEMPLE_U", "0.14"))
+EYE2TEMPLE_N   = float(os.environ.get("EYE2TEMPLE_N", "-0.02"))
 W_CAP          = int(os.environ.get("CAP_W", "960"))
 H_CAP          = int(os.environ.get("CAP_H", "540"))
 CAM_INDEX      = int(os.environ.get("CAM_INDEX", "1"))
-SMOOTH_A       = float(os.environ.get("SMOOTH_A", "0.85"))       # 指数平滑
+SMOOTH_A       = float(os.environ.get("SMOOTH_A", "0.85"))
 
-def default_state(fid=DEFAULT_FRAME_ID):
+SIZES = ("S", "M", "L")
+DEFAULT_SIZE = "M"
+
+def default_state(fid=DEFAULT_FRAME_ID, sz=DEFAULT_SIZE):
     return {
         "frameId": fid,
-        # Global
-        "scale":1.0, "scaleX":1.0, "scaleY":1.0,
+        "size": sz,                     # 当前规格
+        "fitMode": "once",              # 'once' | 'manual'
+        "fitDone": False,               # once模式是否已完成匹配
+        # Global（内部使用；UI 不暴露）
+        "scale": SIZE_SCALE.get(sz, 1), "scaleX":1.0, "scaleY":1.0,
         "shiftT":0.0, "offsetN":0.0,
-        "templeRotDeg": 5.0,  # 左臂 +gRot，右臂 -gRot
-        # 镜臂微调（屏幕右→后端L；屏幕左→后端R）
+        "templeRotDeg": 5.0,
+        # 镜臂微调（UI 可调）
         "templeScaleL":1.0, "templeShiftTL":0.0, "templeOffsetNL":0.0, "templeRotL": 5.0,
         "templeScaleR":1.0, "templeShiftTR":0.0, "templeOffsetNR":0.0, "templeRotR": -5.0,
-        # 固定外眼角
         "pivotMode":"eye_outer",
-        # 可选
-        "occlusion": False,
         "autoHideTemples": False,
     }
 
 state_lock = threading.Lock()
 STATE = default_state()
 
-# ---------- 贴图 ----------
+# ---------- 读图 ----------
 def _read_rgba(path):
     img = cv2.imread(path, cv2.IMREAD_UNCHANGED)
-    if img is None: raise FileNotFoundError(f"Missing image: {path}")
+    if img is None:
+        raise FileNotFoundError(f"Missing image: {path}")
     if img.ndim == 2:
         img = cv2.cvtColor(img, cv2.COLOR_GRAY2BGRA)
     elif img.shape[2] == 3:
@@ -59,10 +66,6 @@ def _read_rgba(path):
     return img
 
 def pivot_from_alpha(img_rgba, side='L'):
-    """
-    从镜臂 PNG 的 alpha 取近铰链的短线（局部两点）。
-    支持 inner/outer/auto：auto 会自动选更靠耳侧（outer）的候选。
-    """
     h, w = img_rgba.shape[:2]
     a = img_rgba[...,3] > 0
     ys, xs = np.where(a)
@@ -76,58 +79,47 @@ def pivot_from_alpha(img_rgba, side='L'):
     y = int((y0 + y1)//2)
     eps = max(1, int(0.003*w))
 
-    # 两个候选：inner/outer
     if side=='L':
-        inner  = ((x1, y), (x1+eps, y))        # 靠镜框
-        outer  = ((x0, y), (x0+eps, y))        # 靠耳朵
-        if ARM_PIVOT_EDGE == 'inner': pick = inner
+        inner  = ((x1, y), (x1+eps, y))
+        outer  = ((x0, y), (x0+eps, y))
+        if   ARM_PIVOT_EDGE == 'inner': pick = inner
         elif ARM_PIVOT_EDGE == 'outer': pick = outer
-        else:  # auto：选更靠耳侧（x 更小）
-            pick = outer if x0 < x1 else inner
+        else: pick = outer if x0 < x1 else inner
     else:
         inner  = ((x0-eps, y), (x0, y))
         outer  = ((x1-eps, y), (x1, y))
-        if ARM_PIVOT_EDGE == 'inner': pick = inner
+        if   ARM_PIVOT_EDGE == 'inner': pick = inner
         elif ARM_PIVOT_EDGE == 'outer': pick = outer
-        else:  # auto：选更靠耳侧（x 更大）
-            pick = outer if x1 > x0 else inner
+        else: pick = outer if x1 > x0 else inner
     return pick
 
-def load_layers(fid):
-    front = os.path.join(FRAME_DIR, f"Frame_{fid}_front.png")
-    left  = os.path.join(FRAME_DIR, f"Frame_{fid}_left_arm.png")
-    right = os.path.join(FRAME_DIR, f"Frame_{fid}_right_arm.png")
+def load_layers(fid, size_label):
+    def p(part):
+        sized = os.path.join(FRAME_DIR, f"Frame_{fid}_{part}_{size_label}.png")
+        plain = os.path.join(FRAME_DIR, f"Frame_{fid}_{part}.png")
+        return sized if os.path.exists(sized) else plain
+    front = p("front")
+    left  = p("left_arm")
+    right = p("right_arm")
     L = {"front": _read_rgba(front)}
     if os.path.exists(left):  L["left"]  = _read_rgba(left)
     if os.path.exists(right): L["right"] = _read_rgba(right)
     return L
 
-layers = load_layers(DEFAULT_FRAME_ID)
+# 初始化图层（默认 M）
+layers = load_layers(DEFAULT_FRAME_ID, DEFAULT_SIZE)
 H_ov, W_ov = layers["front"].shape[:2]
 SRC_L = (int(0.18*W_ov), int(0.50*H_ov))
 SRC_R = (int(0.82*W_ov), int(0.50*H_ov))
-SRC_L_PIVOT = pivot_from_alpha(layers["left"],  'L') if "left"  in layers else ((SRC_L, (SRC_L[0]+1, SRC_L[1])))
-SRC_R_PIVOT = pivot_from_alpha(layers["right"], 'R') if "right" in layers else (((SRC_R[0]-1, SRC_R[1]), SRC_R))
+SRC_L_PIVOT = pivot_from_alpha(layers.get("left"),  'L') if "left"  in layers else ((SRC_L, (SRC_L[0]+1, SRC_L[1])))
+SRC_R_PIVOT = pivot_from_alpha(layers.get("right"), 'R') if "right" in layers else (((SRC_R[0]-1, SRC_R[1]), SRC_R))
 FRONT_BASE_DIST = float(np.linalg.norm(np.array(SRC_R) - np.array(SRC_L))) + 1e-6
 
 # ---------- MediaPipe ----------
 mp_fm = mp.solutions.face_mesh
 fm = mp_fm.FaceMesh(max_num_faces=1, refine_landmarks=False,
                     min_detection_confidence=0.5, min_tracking_confidence=0.5)
-LM_LEFT_OUTER, LM_RIGHT_OUTER = 263, 33  # 解剖学左/右（人物视角）
 def to_px(lm, w, h): return np.array([lm.x*w, lm.y*h], np.float32)
-
-# ---------- 遮挡（可选） ----------
-mp_seg = mp.solutions.selfie_segmentation
-segmenter = mp_seg.SelfieSegmentation(model_selection=1)
-def get_face_mask(frame_bgr):
-    H,W = frame_bgr.shape[:2]
-    small = cv2.resize(frame_bgr, (256,256), interpolation=cv2.INTER_AREA)
-    res = segmenter.process(cv2.cvtColor(small, cv2.COLOR_BGR2RGB))
-    m = (res.segmentation_mask*255).astype(np.uint8)
-    m = cv2.resize(m, (W,H), interpolation=cv2.INTER_LINEAR)
-    m = cv2.erode(m, cv2.getStructuringElement(cv2.MORPH_ELLIPSE,(5,5)), 1)
-    return (m.astype(np.float32)/255.0)[...,None]
 
 # ---------- 仿射 ----------
 def warp_rgba(rgba, src_L, src_R, dst_ctr, u, n, d, frame_shape,
@@ -161,33 +153,52 @@ last_jpeg, last_ts = None, 0
 smooth = {"pL":None,"pR":None,"u":None,"ctr":None,"d":None}
 def ema(prev, new, a): return new if prev is None else (a*prev + (1.0-a)*new)
 
-# ---------- 流 ----------
+# ---------- 尺寸切换与一次性 Auto-Fit ----------
+def _apply_size_and_reload(size_label):
+    """切换规格：设置内部倍率，并按当前 frameId 重载对应尺寸贴图"""
+    global layers, SRC_L, SRC_R, SRC_L_PIVOT, SRC_R_PIVOT, H_ov, W_ov, FRONT_BASE_DIST
+    with state_lock:
+        STATE["size"]  = size_label
+        STATE["scale"] = SIZE_SCALE.get(size_label, 1.0)
+        fid = STATE.get("frameId", DEFAULT_FRAME_ID)
+    layers = load_layers(fid, size_label)
+    H_ov, W_ov = layers["front"].shape[:2]
+    SRC_L = (int(0.18*W_ov), int(0.50*H_ov))
+    SRC_R = (int(0.82*W_ov), int(0.50*H_ov))
+    SRC_L_PIVOT = pivot_from_alpha(layers.get("left"),  'L') if "left"  in layers else ((SRC_L, (SRC_L[0]+1, SRC_L[1])))
+    SRC_R_PIVOT = pivot_from_alpha(layers.get("right"), 'R') if "right" in layers else (((SRC_R[0]-1, SRC_R[1]), SRC_R))
+    FRONT_BASE_DIST = float(np.linalg.norm(np.array(SRC_R) - np.array(SRC_L))) + 1e-6
+
+def _autofit_size(d_px, W_img):
+    """根据 r=d/W 选择 S/M/L"""
+    if W_img <= 0: return "M"
+    r = float(d_px) / float(W_img)
+    if   r < T_SM: return "S"
+    elif r < T_ML: return "M"
+    else:          return "L"
+
+# ---------- 推流 ----------
 def generate_stream(jpg_quality=80):
-    global last_jpeg, last_ts, layers, SRC_L, SRC_R, SRC_L_PIVOT, SRC_R_PIVOT, FRONT_BASE_DIST
+    global last_jpeg, last_ts
     fps_ema, t_prev = 0.0, time.perf_counter()
-    face_mask_cached, frame_id = None, 0
 
     while True:
         ok, frame = cap.read()
-        if not ok: time.sleep(0.01); continue
+        if not ok:
+            time.sleep(0.01); continue
         frame = cv2.flip(frame, 1)
         H, W = frame.shape[:2]
 
         with state_lock: st = dict(STATE)
 
-        occl = bool(st.get("occlusion", False))
-        if occl and ((frame_id % 3) == 0 or face_mask_cached is None):
-            face_mask_cached = get_face_mask(frame)
-
         res = fm.process(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
         if res.multi_face_landmarks:
             lm = res.multi_face_landmarks[0].landmark
 
-            # 外眼角（不按 x 交换，保持解剖学左右）
-            pL_eye = to_px(lm[LM_LEFT_OUTER],  W, H)   # 人物左=屏幕右
-            pR_eye = to_px(lm[LM_RIGHT_OUTER], W, H)   # 人物右=屏幕左
+            pL_eye = to_px(lm[263], W, H)
+            pR_eye = to_px(lm[33],  W, H)
 
-            # 基础方向与距离（屏幕左->屏幕右）
+            # 保证 pL 在左、pR 在右
             if pL_eye[0] <= pR_eye[0]:
                 p_imgL, p_imgR = pL_eye, pR_eye
             else:
@@ -215,64 +226,71 @@ def generate_stream(jpg_quality=80):
             if n_dir[1] < 0: n_dir = -n_dir
             center_eyes = (pL_eye + pR_eye) * 0.5
 
-            # ===== Global（必须在锚点之前）=====
-            gT = float(st["shiftT"]); gN = float(st["offsetN"])
-            gScale  = float(st["scale"]);  gScaleX = float(st["scaleX"]); gScaleY = float(st["scaleY"])
-            gRot    = float(st["templeRotDeg"])
-            effX = gScale * gScaleX   # 横向最终比例
-            effY = gScale * gScaleY   # 纵向最终比例
+            # === 一次性 Auto-Fit（仅在 fitMode=once 且尚未 fitDone 时触发） ===
+            with state_lock:
+                fitMode = STATE.get("fitMode","once")
+                fitDone = bool(STATE.get("fitDone", False))
+            if fitMode == "once" and not fitDone:
+                cand = _autofit_size(d_scale, W)
+                _apply_size_and_reload(cand)
+                with state_lock:
+                    STATE["fitDone"] = True  # 锁定；之后不再改动
 
-            # —— 锚点（随 Global 等比 + 轻量自适应）——
-            alpha = min(0.25, max(0.0, gScale - 1.0) * 0.20)  # S>1 时最多 +25%
-            u_off = EYE2TEMPLE_U * d_scale * effX * (1.0 + alpha)
+            # 取渲染参数
+            with state_lock:
+                gT = float(STATE["shiftT"]); gN = float(STATE["offsetN"])
+                gScale = float(STATE["scale"])
+                gScaleX = float(STATE["scaleX"]); gScaleY = float(STATE["scaleY"])
+                gRot    = float(STATE["templeRotDeg"])
+                autoHide = bool(STATE.get("autoHideTemples", False))
+                sz_label = STATE.get("size","?")
+
+            effX = gScale * gScaleX
+            effY = gScale * gScaleY
+
+            # 锚点
+            u_off = EYE2TEMPLE_U * d_scale * effX
             n_off = EYE2TEMPLE_N * d_scale * effY
-            pL_anchor = pL_eye + (+u_off)*u_dir + (n_off)*n_dir  # 后端L=屏幕右=人物左
-            pR_anchor = pR_eye + (-u_off)*u_dir + (n_off)*n_dir  # 后端R=屏幕左=人物右
+            pL_anchor = pL_eye + (+u_off)*u_dir + (n_off)*n_dir
+            pR_anchor = pR_eye + (-u_off)*u_dir + (n_off)*n_dir
 
-            # —— 自动隐藏（基于外眼角 z 的远近）——
+            # auto-hide（基于左右眼 z 深度的简易判断）
             hideL = hideR = False
-            if st.get("autoHideTemples", False):
-                zL, zR = lm[LM_LEFT_OUTER].z, lm[LM_RIGHT_OUTER].z
+            if autoHide:
+                zL, zR = lm[263].z, lm[33].z
                 dz, TH = float(zR - zL), 0.003
-                if abs(dz) <= TH:
-                    hideL = hideR = False
-                elif dz > TH:
-                    hideL, hideR = False, True   # 右更远：藏人物右（屏幕左）
-                else:
-                    hideL, hideR = True,  False  # 左更远：藏人物左（屏幕右）
+                if   abs(dz) <= TH: hideL = hideR = False
+                elif dz > TH:      hideL, hideR = False, True
+                else:              hideL, hideR = True,  False
 
-            # ===== 镜臂（微调也随 Global 比例）=====
+            # 镜臂（可调）
+            with state_lock:
+                stL = (STATE["templeScaleL"], STATE["templeShiftTL"], STATE["templeOffsetNL"], STATE["templeRotL"])
+                stR = (STATE["templeScaleR"], STATE["templeShiftTR"], STATE["templeOffsetNR"], STATE["templeRotR"])
+
             if "left" in layers and not hideL:
-                dst_L = pL_anchor \
-                      + ((gT + float(st["templeShiftTL"])) * d_scale * effX) * u_dir \
-                      + ((gN + float(st["templeOffsetNL"])) * d_scale * effY) * n_dir
-                thetaL = gRot + float(st.get("templeRotL", 0.0))
                 fg, a = warp_rgba(
-                    layers["left"], SRC_L_PIVOT[0], SRC_L_PIVOT[1], dst_L,
+                    layers["left"], SRC_L_PIVOT[0], SRC_L_PIVOT[1],
+                    pL_anchor + (stL[1]*d_scale*effX)*u_dir + (stL[2]*d_scale*effY)*n_dir,
                     u_dir, n_dir, d_scale, frame.shape,
-                    scale=float(st["templeScaleL"]) * gScale,
-                    sx=gScaleX, sy=gScaleY,
-                    theta_add_deg=thetaL, base_dist_ref=FRONT_BASE_DIST
+                    scale=stL[0]*gScale, sx=gScaleX, sy=gScaleY,
+                    theta_add_deg=float(STATE["templeRotDeg"])+float(stL[3]),
+                    base_dist_ref=FRONT_BASE_DIST
                 )
-                back = a * (1.0 - face_mask_cached) if (occl and face_mask_cached is not None) else a
-                frame = (frame*(1-back) + fg*back).astype(np.uint8)
+                frame = (frame*(1-a) + fg*a).astype(np.uint8)
 
             if "right" in layers and not hideR:
-                dst_R = pR_anchor \
-                      + ((gT + float(st["templeShiftTR"])) * d_scale * effX) * u_dir \
-                      + ((gN + float(st["templeOffsetNR"])) * d_scale * effY) * n_dir
-                thetaR = -gRot + float(st.get("templeRotR", 0.0))
                 fg, a = warp_rgba(
-                    layers["right"], SRC_R_PIVOT[0], SRC_R_PIVOT[1], dst_R,
+                    layers["right"], SRC_R_PIVOT[0], SRC_R_PIVOT[1],
+                    pR_anchor + (stR[1]*d_scale*effX)*u_dir + (stR[2]*d_scale*effY)*n_dir,
                     u_dir, n_dir, d_scale, frame.shape,
-                    scale=float(st["templeScaleR"]) * gScale,
-                    sx=gScaleX, sy=gScaleY,
-                    theta_add_deg=thetaR, base_dist_ref=FRONT_BASE_DIST
+                    scale=stR[0]*gScale, sx=gScaleX, sy=gScaleY,
+                    theta_add_deg=-float(STATE["templeRotDeg"])+float(stR[3]),
+                    base_dist_ref=FRONT_BASE_DIST
                 )
-                back = a * (1.0 - face_mask_cached) if (occl and face_mask_cached is not None) else a
-                frame = (frame*(1-back) + fg*back).astype(np.uint8)
+                frame = (frame*(1-a) + fg*a).astype(np.uint8)
 
-            # ===== 前框（同一套比例）=====
+            # 前框
             dst_ctr = center_eyes + (gT*d_scale)*u_dir + (gN*d_scale)*n_dir
             fg, a = warp_rgba(
                 layers["front"], SRC_L, SRC_R, dst_ctr,
@@ -281,9 +299,9 @@ def generate_stream(jpg_quality=80):
             )
             frame = (frame*(1-a) + fg*a).astype(np.uint8)
 
-            # —— DBG 叠字 —— 
-            dbg = f"S={gScale:.2f} SX={gScaleX:.2f} SY={gScaleY:.2f}"
-            cv2.putText(frame, dbg, (14, 38), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (0,255,255), 2, cv2.LINE_AA)
+            # HUD：当前 size
+            cv2.putText(frame, f"Size:{sz_label}", (14, 38),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.9, (0,255,255), 2, cv2.LINE_AA)
 
         # FPS
         t = time.perf_counter(); dt = t - t_prev; t_prev = t
@@ -292,17 +310,17 @@ def generate_stream(jpg_quality=80):
             cv2.putText(frame, f"{fps_ema:4.1f} FPS", (W-200, 42),
                         cv2.FONT_HERSHEY_SIMPLEX, 1.0, (0,255,0), 2, cv2.LINE_AA)
 
-        ok, buf = cv2.imencode('.jpg', frame, [cv2.IMWRITE_JPEG_QUALITY, 80])
+        ok, buf = cv2.imencode('.jpg', frame, [cv2.IMWRITE_JPEG_QUALITY, jpg_quality])
         if not ok: continue
         last_jpeg, last_ts = buf.tobytes(), time.time()
         yield (b'--frame\r\nContent-Type: image/jpeg\r\n\r\n' + last_jpeg + b'\r\n')
-        frame_id += 1
 
 # ---------- Flask ----------
 app = Flask(__name__, static_folder=".", static_url_path="")
 
 @app.route("/")
 def root():
+    # 前端文件名沿用 index1.html
     return send_from_directory(".", "index.html")
 
 @app.route("/stream.mjpg")
@@ -322,43 +340,60 @@ def api_params():
     if request.method == "GET":
         with state_lock: return jsonify(STATE)
     data = request.get_json(force=True) or {}
+    # 仅接受：镜臂微调 + autoHide（无 global/occlusion）
     with state_lock:
-        for k in ["scale","scaleX","scaleY","shiftT","offsetN","templeRotDeg",
-                  "templeScaleL","templeShiftTL","templeOffsetNL","templeRotL",
+        for k in ["templeScaleL","templeShiftTL","templeOffsetNL","templeRotL",
                   "templeScaleR","templeShiftTR","templeOffsetNR","templeRotR",
-                  "occlusion","autoHideTemples"]:
+                  "autoHideTemples"]:
             if k in data:
-                if k in ("occlusion","autoHideTemples"):
-                    STATE[k] = bool(data[k])
-                else:
-                    STATE[k] = float(data[k])
+                STATE[k] = bool(data[k]) if k=="autoHideTemples" else float(data[k])
         STATE["pivotMode"] = "eye_outer"
     return jsonify(ok=True, state=STATE)
 
-def _switch(fid):
-    global layers, SRC_L, SRC_R, SRC_L_PIVOT, SRC_R_PIVOT, H_ov, W_ov, FRONT_BASE_DIST
-    layers = load_layers(fid)
-    H_ov, W_ov = layers["front"].shape[:2]
-    SRC_L = (int(0.18*W_ov), int(0.50*H_ov))
-    SRC_R = (int(0.82*W_ov), int(0.50*H_ov))
-    SRC_L_PIVOT = pivot_from_alpha(layers.get("left"),  'L') if "left"  in layers else ((SRC_L, (SRC_L[0]+1, SRC_L[1])))
-    SRC_R_PIVOT = pivot_from_alpha(layers.get("right"), 'R') if "right" in layers else (((SRC_R[0]-1, SRC_R[1]), SRC_R))
-    FRONT_BASE_DIST = float(np.linalg.norm(np.array(SRC_R) - np.array(SRC_L))) + 1e-6
+@app.route("/api/size", methods=["POST"])
+def api_size():
+    """手动切换 S/M/L，并锁定为手动模式"""
+    data = request.get_json(force=True) or {}
+    sz = (data.get("size") or "").upper()
+    if sz not in SIZES:
+        return jsonify(ok=False, err="size must be S/M/L"), 400
+    with state_lock:
+        STATE["fitMode"] = "manual"
+        STATE["fitDone"] = True
+    _apply_size_and_reload(sz)
+    with state_lock:
+        cur = dict(STATE)
+    return jsonify(ok=True, state=cur)
+
+@app.route("/api/fit_once", methods=["POST"])
+def api_fit_once():
+    """复位为“一次自动匹配”模式；下一帧检测到人脸即会匹配一次并锁定"""
+    with state_lock:
+        STATE["fitMode"] = "once"
+        STATE["fitDone"] = False
+    return jsonify(ok=True, state=STATE)
+
+def _switch_frame(fid):
+    with state_lock:
+        STATE["frameId"] = fid
+        size_label = STATE.get("size", DEFAULT_SIZE)
+    _apply_size_and_reload(size_label)
 
 @app.route("/api/switch_frame", methods=["POST"])
 def api_switch_frame():
     data = request.get_json(force=True) or {}
     fid = data.get("id") or data.get("frame")
-    if fid not in FRAME_IDS: return jsonify(ok=False, err="unknown frame id"), 400
-    _switch(fid)
-    with state_lock: STATE["frameId"] = fid
+    if fid not in FRAME_IDS:
+        return jsonify(ok=False, err="unknown frame id"), 400
+    _switch_frame(fid)
     return jsonify(ok=True, frameId=fid)
 
 @app.route("/api/reset", methods=["POST"])
 def api_reset():
     with state_lock:
         fid = STATE.get("frameId", DEFAULT_FRAME_ID)
-        STATE.clear(); STATE.update(default_state(fid))
+        STATE.clear(); STATE.update(default_state(fid, DEFAULT_SIZE))
+    _apply_size_and_reload(DEFAULT_SIZE)
     return jsonify(ok=True, state=STATE)
 
 @app.route("/api/debug_layers")

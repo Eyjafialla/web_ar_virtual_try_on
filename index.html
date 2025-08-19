@@ -5,14 +5,14 @@
 <meta name="viewport" content="width=device-width,initial-scale=1" />
 <title>Web AR Try-On</title>
 <style>
-:root{--bg:#0b0f19;--panel:#0f1424;--text:#e7ecf3;--muted:#98a2b3;--accent:#7c3aed}
+:root{--bg:#0b0f19;--panel:#0f1424;--text:#e7ecf3;--accent:#7c3aed}
 *{box-sizing:border-box} html,body{height:100%}
 body{margin:0;background:#0b0f19;color:var(--text);font:14px/1.45 system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial}
 header{display:flex;gap:12px;align-items:center;padding:10px 14px;background:#0e1426;border-bottom:1px solid rgba(255,255,255,.08)}
 .brand{font-weight:700}.spacer{flex:1}
 .seg{display:flex;gap:6px}
-button, .seg button{border:1px solid rgba(255,255,255,.14);background:#111831;color:#fff;border-radius:10px;padding:8px 12px;cursor:pointer}
-button.active, .seg button.active{background:var(--accent);border-color:transparent}
+button{border:1px solid rgba(255,255,255,.14);background:#111831;color:#fff;border-radius:10px;padding:8px 12px;cursor:pointer}
+button.active{background:var(--accent);border-color:transparent}
 .thumbs{display:flex;gap:8px;margin-left:4px}
 .thumb{width:64px;height:36px;object-fit:contain;background:#111831;border:1px solid rgba(255,255,255,.15);border-radius:8px;padding:2px;cursor:pointer;opacity:.85;transition:.15s}
 .thumb:hover{opacity:1}
@@ -27,68 +27,53 @@ main{display:grid;grid-template-columns:1fr 420px;gap:16px;padding:12px}
 .slider{display:grid;grid-template-columns:120px 1fr 64px;gap:8px;align-items:center}
 .group{border:1px solid rgba(255,255,255,.1);border-radius:12px;padding:10px;background:#0f1424}
 .group h4{margin:0 0 6px 0;font-size:13px;color:#cbd5e1}
-img{max-width:100%;height:auto}
 .hint{color:#94a3b8;font-size:12px}
+img{max-width:100%;height:auto}
 </style>
 </head>
 <body>
 <header>
   <div class="brand">Web AR Try-On</div>
 
-  <!-- 旧的文本按钮还保留（可选），也可只用缩略图 -->
   <div class="seg">
     <button id="btnFrameA" class="active">Frame A</button>
     <button id="btnFrameB">Frame B</button>
     <button id="btnFrameC">Frame C</button>
   </div>
 
-  <!-- 可点击缩略图条 -->
   <div class="thumbs" id="thumbBar">
     <img src="Frame_A.png" id="thumbA" class="thumb active" data-fid="A" alt="Frame A">
     <img src="Frame_B.png" id="thumbB" class="thumb" data-fid="B" alt="Frame B">
     <img src="Frame_C.png" id="thumbC" class="thumb" data-fid="C" alt="Frame C">
   </div>
 
-  <div class="seg">
-    <button id="srcServer" class="active">Server (MJPEG)</button>
+  <!-- 新增：S/M/L 手动选择 & 一次性 Auto-Fit -->
+  <div class="seg" style="margin-left:8px">
+    <button id="btnSizeS">S</button>
+    <button id="btnSizeM" class="active">M</button>
+    <button id="btnSizeL">L</button>
+    <button id="btnFitOnce">Auto fit once</button>
   </div>
 
   <div class="spacer"></div>
 
-  <!-- 当前 Frame 缩略图 -->
   <img id="currThumb" class="currThumb" src="Frame_A.png" alt="Current frame">
-
   <span id="frameBadge" class="badge">Frame: A</span>
-  <span id="permBadge" class="badge">Ready</span>
-  <span id="fpsBadge" class="badge">FPS: –</span>
-  <span id="resBadge" class="badge">– × –</span>
+  <span id="sizeBadge"  class="badge">Size: –</span>
+  <span id="fpsBadge"   class="badge">FPS: –</span>
+  <span id="resBadge"   class="badge">– × –</span>
   <button id="start">Start</button>
   <button id="stop" disabled>Stop</button>
   <button id="snap">📸 Snapshot</button>
 </header>
 
 <main>
-  <div class="stage">
-    <img id="mjpeg" alt="MJPEG stream"/>
-  </div>
+  <div class="stage"><img id="mjpeg" alt="MJPEG stream"/></div>
 
   <div class="panel">
+    <div class="row"><span class="badge">Pivot: Eye outer (263/33)</span></div>
     <div class="row">
       <label><input type="checkbox" id="autoHide"> Auto-hide temples</label>
-      <label><input type="checkbox" id="occlusion"> Occlusion (arms behind face)</label>
-    </div>
-    <div class="row"><span class="badge">Pivot: Eye outer (263/33)</span></div>
-
-    <div class="group">
-      <h4>Global</h4>
-      <div class="slider"><label>Scale</label> <input id="sScale"  type="range" min="0.6" max="1.8" step="0.01" value="1.0"><output id="oScale">1.00×</output></div>
-      <div class="slider"><label>Width</label> <input id="sScaleX" type="range" min="0.6" max="1.8" step="0.01" value="1.0"><output id="oScaleX">1.00×</output></div>
-      <div class="slider"><label>Height</label><input id="sScaleY" type="range" min="0.6" max="1.8" step="0.01" value="1.0"><output id="oScaleY">1.00×</output></div>
-      <div class="slider"><label>Shift (↔)</label><input id="sShiftT" type="range" min="-0.5" max="0.5" step="0.005" value="0"><output id="oShiftT">0.000</output></div>
-      <div class="slider"><label>Offset (↕)</label><input id="sOffsetN" type="range" min="-0.5" max="0.5" step="0.005" value="0"><output id="oOffsetN">0.000</output></div>
-      <div class="slider"><label>Temple rot</label><input id="sTempleRot" type="range" min="-20" max="20" step="0.5" value="5"><output id="oTempleRot">5.0°</output></div>
-      <div class="row"><button id="btnReset">Reset</button><button id="btnExport">Export params</button></div>
-      <div class="hint">Global 作用于前框与两侧镜臂；下面镜臂滑杆仅做微调。</div>
     </div>
 
     <div class="group">
@@ -113,29 +98,29 @@ img{max-width:100%;height:auto}
 (() => {
   const img = document.getElementById('mjpeg');
 
-  // 顶部控件
+  // Frame 选择
   const btnA = document.getElementById('btnFrameA');
   const btnB = document.getElementById('btnFrameB');
   const btnC = document.getElementById('btnFrameC');
+
+  // Size 选择
+  const btnSizeS = document.getElementById('btnSizeS');
+  const btnSizeM = document.getElementById('btnSizeM');
+  const btnSizeL = document.getElementById('btnSizeL');
+  const btnFitOnce= document.getElementById('btnFitOnce');
+
   const frameBadge = document.getElementById('frameBadge');
+  const sizeBadge  = document.getElementById('sizeBadge');
   const startBtn = document.getElementById('start');
   const stopBtn  = document.getElementById('stop');
   const snapBtn  = document.getElementById('snap');
   const fpsBadge = document.getElementById('fpsBadge');
   const resBadge = document.getElementById('resBadge');
-  const permBadge= document.getElementById('permBadge');
   const currThumb= document.getElementById('currThumb');
   const thumbBar = document.getElementById('thumbBar');
-
-  // 复选框
   const autoHide  = document.getElementById('autoHide');
-  const occlusion = document.getElementById('occlusion');
 
-  // 全局滑杆
-  const sScale = s('sScale'), sScaleX=s('sScaleX'), sScaleY=s('sScaleY'),
-        sShiftT=s('sShiftT'), sOffsetN=s('sOffsetN'), sTempleRot=s('sTempleRot');
-
-  // 镜臂滑杆（屏幕右→后端L；屏幕左→后端R）
+  // 镜臂滑杆
   const sTempleScaleL=s('sTempleScaleL'), sTempleShiftTL=s('sTempleShiftTL'),
         sTempleOffsetNL=s('sTempleOffsetNL'), sTempleRotL=s('sTempleRotL');
   const sTempleScaleR=s('sTempleScaleR'), sTempleShiftTR=s('sTempleShiftTR'),
@@ -150,34 +135,36 @@ img{max-width:100%;height:auto}
 
   function api(p){ return p; }
 
-  function highlight(fid){
-    // 文本按钮高亮
+  function highlightFrame(fid){
     [btnA,btnB,btnC].forEach(b=>b.classList.remove('active'));
     ({A:btnA,B:btnB,C:btnC}[fid]).classList.add('active');
-    // 缩略图高亮
     [...thumbBar.querySelectorAll('.thumb')].forEach(t=>t.classList.remove('active'));
     ({A:thumbA,B:thumbB,C:thumbC}[fid]).classList.add('active');
-    // 当前缩略图
     currThumb.src = `Frame_${fid}.png`;
     frameBadge.textContent = 'Frame: ' + fid;
   }
 
-  function setFrame(fid, silent=false){
-    highlight(fid);
-    if (!silent) {
-      fetch(api('/api/switch_frame'), {method:'POST', headers:{'Content-Type':'application/json'},
-             body:JSON.stringify({id:fid})}).catch(()=>{});
-    }
+  function setFrame(fid){
+    highlightFrame(fid);
+    fetch(api('/api/switch_frame'), {method:'POST', headers:{'Content-Type':'application/json'},
+           body:JSON.stringify({id:fid})}).catch(()=>{});
   }
 
-  function readGlobal(){
-    return {
-      scale:+sScale.value, scaleX:+sScaleX.value, scaleY:+sScaleY.value,
-      shiftT:+sShiftT.value, offsetN:+sOffsetN.value, templeRotDeg:+sTempleRot.value,
-      occlusion: occlusion.checked, autoHideTemples: autoHide.checked,
-      pivotMode: 'eye_outer'
-    };
+  function highlightSize(sz){
+    [btnSizeS, btnSizeM, btnSizeL].forEach(b=>b.classList.remove('active'));
+    ({S:btnSizeS, M:btnSizeM, L:btnSizeL}[sz] || btnSizeM).classList.add('active');
   }
+
+  function setSize(sz){
+    highlightSize(sz);
+    fetch(api('/api/size'), {method:'POST', headers:{'Content-Type':'application/json'},
+           body:JSON.stringify({size:sz})}).then(()=>pollState()).catch(()=>{});
+  }
+
+  function fitOnce(){
+    fetch(api('/api/fit_once'), {method:'POST'}).then(()=>pollState()).catch(()=>{});
+  }
+
   function readLeft(){
     return {
       templeScaleL:+sTempleScaleL.value,
@@ -195,13 +182,6 @@ img{max-width:100%;height:auto}
     };
   }
   function updateOutputs(){
-    o('oScale').textContent   = (+sScale.value).toFixed(2)+'×';
-    o('oScaleX').textContent  = (+sScaleX.value).toFixed(2)+'×';
-    o('oScaleY').textContent  = (+sScaleY.value).toFixed(2)+'×';
-    o('oShiftT').textContent  = (+sShiftT.value).toFixed(3);
-    o('oOffsetN').textContent = (+sOffsetN.value).toFixed(3);
-    o('oTempleRot').textContent = (+sTempleRot.value).toFixed(1)+'°';
-
     o('oTempleScaleL').textContent = (+sTempleScaleL.value).toFixed(2)+'×';
     o('oTempleShiftTL').textContent= (+sTempleShiftTL.value).toFixed(3);
     o('oTempleOffsetNL').textContent=(+sTempleOffsetNL.value).toFixed(3);
@@ -213,54 +193,41 @@ img{max-width:100%;height:auto}
     o('oTempleRotR').textContent   = (+sTempleRotR.value).toFixed(1)+'°';
   }
   function postParams(extra){
-    const body = Object.assign({}, readGlobal(), readLeft(), readRight(), extra||{});
+    const body = Object.assign({}, {autoHideTemples: autoHide.checked}, readLeft(), readRight(), extra||{});
     fetch(api('/api/params'), {method:'POST', headers:{'Content-Type':'application/json'},
       body:JSON.stringify(body)}).catch(()=>{});
   }
   function pushAll(){ updateOutputs(); postParams(); }
 
   // 事件绑定
-  [autoHide, occlusion,
-   sScale,sScaleX,sScaleY,sShiftT,sOffsetN,sTempleRot,
+  [autoHide,
    sTempleScaleL,sTempleShiftTL,sTempleOffsetNL,sTempleRotL,
    sTempleScaleR,sTempleShiftTR,sTempleOffsetNR,sTempleRotR
   ].forEach(el => el.addEventListener('input', ()=>{ updateOutputs(); postParams(); }));
 
-  // Reset & Export
-  document.getElementById('btnReset').onclick = () => {
-    sScale.value=1; sScaleX.value=1; sScaleY.value=1; sShiftT.value=0; sOffsetN.value=0; sTempleRot.value=5;
-    sTempleScaleL.value=1; sTempleShiftTL.value=0; sTempleOffsetNL.value=0; sTempleRotL.value=5;
-    sTempleScaleR.value=1; sTempleShiftTR.value=0; sTempleOffsetNR.value=0; sTempleRotR.value=-5;
-    autoHide.checked=false; occlusion.checked=false;
-    pushAll();
-  };
-  document.getElementById('btnExport').onclick = () => {
-    const txt = JSON.stringify(Object.assign({}, readGlobal(), readLeft(), readRight()), null, 2);
-    navigator.clipboard.writeText(txt); alert('已复制参数到剪贴板');
-  };
-
-  // 文本按钮切换
   btnA.onclick = ()=>setFrame('A');
   btnB.onclick = ()=>setFrame('B');
   btnC.onclick = ()=>setFrame('C');
-
-  // 缩略图点击切换
   thumbBar.addEventListener('click', (e)=>{
     const t = e.target.closest('.thumb'); if(!t) return;
     setFrame(t.dataset.fid);
   });
+
+  btnSizeS.onclick = ()=>setSize('S');
+  btnSizeM.onclick = ()=>setSize('M');
+  btnSizeL.onclick = ()=>setSize('L');
+  btnFitOnce.onclick = ()=>fitOnce();
 
   // 启停与快照
   let raf=0, frames=0, last=performance.now();
   function loop(){
     frames++; const now=performance.now();
     if(now-last>500){ const fps=Math.round(frames*1000/(now-last)); fpsBadge.textContent=`FPS: ${fps}`; frames=0; last=now; }
-    const w=img.naturalWidth|0, h=img.naturalHeight|0; if(w&&h) document.getElementById('resBadge').textContent=`${w} × ${h}`;
+    const w=img.naturalWidth|0, h=img.naturalHeight|0; if(w&&h) resBadge.textContent=`${w} × ${h}`;
     raf = requestAnimationFrame(loop);
   }
   document.getElementById('start').onclick = () => {
     setRunning(true);
-    permBadge.textContent='Running'; permBadge.classList.add('ok');
     cancelAnimationFrame(raf); raf=requestAnimationFrame(loop);
     img.onerror = () => setTimeout(()=>{ img.src = '/stream.mjpg?ts='+Date.now(); }, 800);
     img.src = '/stream.mjpg?ts='+Date.now();
@@ -270,19 +237,25 @@ img{max-width:100%;height:auto}
     if(raf) cancelAnimationFrame(raf);
     img.removeAttribute('src');
     setRunning(false);
-    permBadge.textContent='Stopped'; permBadge.classList.remove('ok');
   };
   document.getElementById('snap').onclick = () => {
     const a=document.createElement('a'); a.download=`snapshot_${Date.now()}.jpg`; a.href='/snapshot'; a.click();
   };
 
-  // 初始化：以服务端 state 为准
-  fetch('/api/params').then(r=>r.json()).then(st=>{
-    const fid = (st && st.frameId) || 'A';
-    highlight(fid);
-  }).catch(()=>highlight('A'));
+  // 轮询显示当前 Frame/Size 与模式
+  function pollState(){
+    fetch('/api/params').then(r=>r.json()).then(st=>{
+      const fid = (st && st.frameId) || 'A';
+      highlightFrame(fid);
+      const sz  = (st && st.size) || 'M';
+      highlightSize(sz);
+      const mode = (st && st.fitMode) || 'once';
+      sizeBadge.textContent = `Size: ${sz} (${mode})`;
+    }).catch(()=>{ /* ignore */ });
+  }
+  setInterval(pollState, 1000);
+  pollState(); // 初次
 })();
 </script>
 </body>
 </html>
-
